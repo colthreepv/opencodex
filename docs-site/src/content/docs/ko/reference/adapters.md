@@ -210,6 +210,27 @@ discovery에 모두 적용됩니다.
   더 넓은 내장 executor를 켜며 Codex 승인/샌드박스 규칙을 우회합니다. 예전 설정인
   `unsafeAllowNativeLocalExec: true`는 `nativeLocalExec`을 지정하지 않았을 때만 같은 뜻입니다.
 
+## `devin`
+
+**대상:** Cognition의 `exa.api_server_pb.ApiServerService/GetChatMessage`(`server.codeium.com`, Connect 스트리밍).
+**인증:** `provider.apiKey` 또는 전달된 authorization 헤더의 Devin/Cognition API 키. 로그인은 Auth0 브라우저 사인인을 연 뒤 `SeatManagementService.RegisterUser`로 장기 키를 받습니다.
+
+- 일반 fetch/parse 대신 `runTurn`을 씁니다. 요청과 서버 이벤트는 `devin/cloud-direct/wire.ts`의 수동 protobuf 프레이밍으로 다룹니다.
+- `GetCascadeModelConfigs`로 계정별 모델을 조회하고, 플랜에 없는 모델은 요청 시점이 아니라 목록에서 걸러집니다.
+- Cognition은 도구 설명 길이 제한과 정확 문구 차단 목록을 적용합니다. 어댑터가 알려진 문구를 바꾸고 긴 설명을 잘라냅니다.
+- 키는 갱신되지 않습니다. 만료되거나 폐기되면 `ocx login devin`을 다시 실행하세요.
+
+## `devin-cli`
+
+**대상:** 로컬에 설치된 Devin CLI. Agent Client Protocol(`devin acp`, stdio 위 줄 단위 JSON-RPC)로 구동합니다.
+**인증:** opencodex는 아무것도 보관하지 않습니다. CLI가 `devin auth login` 자격증명을 직접 들고 있습니다.
+
+- `runTurn` 전용입니다. 자식 프로세스 핸드셰이크에는 일반 와이어 경로에 넘길 요청이 없습니다.
+- 한 턴이 한 ACP 세션입니다. `initialize`, `session/new`, `session/prompt` 순서로 진행되고 그 사이에 `session/update`가 흘러옵니다.
+- CLI 자신의 도구 호출은 밖으로 내보내지 않습니다. Devin이 세션 안에서 직접 실행하므로, 클라이언트 도구로 넘기면 턴이 실패하거나 같은 작업이 두 번 실행됩니다.
+- **권한 요청은 기본적으로 거부합니다.** 이 프로바이더는 운영자의 작업 트리에서 에이전트를 돌립니다. `OPENCODEX_DEVIN_CLI_ALLOW_TOOLS=1`을 설정해야 허용되고, 자식 프로세스는 프록시 환경 대신 범위가 제한된 환경을 받습니다.
+- 실행 파일은 `OPENCODEX_DEVIN_CLI_BIN`, 공식 설치 경로, `PATH` 순으로 찾습니다.
+
 ## `azure-openai` (별칭: `azure`)
 
 **대상:** **Azure OpenAI**. `openai-responses`를 감싸므로 마찬가지로 `passthrough: true`입니다.
