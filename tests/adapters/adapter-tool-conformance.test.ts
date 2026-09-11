@@ -427,7 +427,7 @@ describe("registry-derived routed tool conformance", () => {
       const contract = effectiveAdapterContract(adapterId);
       // Devin is a runTurn-only adapter; its buildRequest returns a placeholder
       // and it never carries the apply_patch exec helper over the buildRequest path.
-      if (contract.wire === "devin") continue;
+      if (contract.wire === "devin" || contract.wire === "devin-cli") continue;
       const body = await outbound(adapterId, codeModeParsed(contract.wire));
       const advertised = advertisedToolNames(contract.wire, body);
       expect(advertised.some(name => name === "exec" || name.endsWith("_exec")), adapterId).toBe(true);
@@ -443,7 +443,7 @@ describe("registry-derived routed tool conformance", () => {
       if (TOOL_LESS_ADAPTERS.has(adapterId)) continue;
       const contract = effectiveAdapterContract(adapterId);
       // Devin is a runTurn-only adapter; tool_choice is not expressed on buildRequest.
-      if (contract.wire === "devin") continue;
+      if (contract.wire === "devin" || contract.wire === "devin-cli") continue;
       const enabledBody = await outbound(adapterId, toolChoiceParsed(contract.wire));
       expect(advertisedToolNames(contract.wire, enabledBody).length, `${adapterId}:enabled`).toBeGreaterThan(0);
       const disabledBody = await outbound(adapterId, toolChoiceParsed(contract.wire, "none"));
@@ -460,7 +460,7 @@ describe("registry-derived routed tool conformance", () => {
         // OpenAI Responses is a normal passthrough here and only parses routed compaction;
         // Cursor's proprietary runTurn stream has focused parser coverage elsewhere.
         // Devin is a runTurn-only adapter with no buildRequest/parseStream wire.
-        expect(["openai-responses", "cursor", "devin"]).toContain(contract.wire);
+        expect(["openai-responses", "cursor", "devin", "devin-cli"]).toContain(contract.wire);
         continue;
       }
       expect(await restoredStreamInput(adapterId, contract.wire), adapterId).toBe(PATCH);
@@ -471,7 +471,7 @@ describe("registry-derived routed tool conformance", () => {
     for (const [adapterId] of adapterDefinitions()) {
       if (TOOL_LESS_ADAPTERS.has(adapterId)) continue;
       const contract = effectiveAdapterContract(adapterId);
-      if (contract.wire === "openai-responses" || contract.wire === "cursor" || contract.wire === "devin") {
+      if (contract.wire === "openai-responses" || contract.wire === "cursor" || contract.wire === "devin" || contract.wire === "devin-cli") {
         // Native Responses passthrough, Cursor's protobuf transport, and Devin's
         // runTurn-only cloud-direct transport do not use the routed adapter tool
         // declaration surface exercised by this registry-wide check.
@@ -487,7 +487,7 @@ describe("registry-derived routed tool conformance", () => {
     for (const [adapterId] of adapterDefinitions()) {
       if (TOOL_LESS_ADAPTERS.has(adapterId)) continue;
       const contract = effectiveAdapterContract(adapterId);
-      if (contract.wire === "openai-responses" || contract.wire === "cursor" || contract.wire === "devin") continue;
+      if (contract.wire === "openai-responses" || contract.wire === "cursor" || contract.wire === "devin" || contract.wire === "devin-cli") continue;
       const parsed = namespacedCollisionParsed(contract.wire);
       // parseRequest rejects this shape for real inbound traffic; keeping the policy mutation here
       // also proves each adapter remains fail-closed when a caller reaches it with a prebuilt AST.
@@ -515,7 +515,7 @@ describe("registry-derived routed tool conformance", () => {
       const contract = effectiveAdapterContract(adapterId);
       const driver = TOOL_WIRE_DRIVERS[contract.wire];
       if (!driver?.streamingToolCall || !driver?.extractWireToolName) {
-        expect(["openai-responses", "cursor", "devin"]).toContain(contract.wire);
+        expect(["openai-responses", "cursor", "devin", "devin-cli"]).toContain(contract.wire);
         continue;
       }
 
@@ -557,7 +557,7 @@ describe("registry-derived routed tool conformance", () => {
       if (TOOL_LESS_ADAPTERS.has(adapterId)) continue;
       const contract = effectiveAdapterContract(adapterId);
       // Devin is a runTurn-only adapter; continuation replay is not expressed on buildRequest.
-      if (contract.wire === "devin") continue;
+      if (contract.wire === "devin" || contract.wire === "devin-cli") continue;
       const body = await outbound(adapterId, continuationParsed(contract.wire));
       expect(continuationInput(contract.wire, body), adapterId).toBe(PATCH);
     }
