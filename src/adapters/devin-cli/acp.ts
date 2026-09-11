@@ -61,24 +61,32 @@ export function sessionPromptFrame(sessionId: string, prompt: string): Record<st
  * Answer a permission request without a human.
  *
  * A headless turn has nobody to approve a tool call, and an unanswered
- * session/request_permission stalls the agent until the turn times out. Prefer
- * an explicitly allow-shaped option over positional guessing; fall back to the
- * first offered option only when none of them say so.
+ * `session/request_permission` stalls the agent until the turn times out. The
+ * answer is a refusal by default: this provider runs an agent in the operator's
+ * own tree, and auto-approving whatever it asks for would let any prompt that
+ * reaches the proxy read, write and execute there. Approval is an explicit
+ * operator decision, and only then is an allow-shaped option preferred over
+ * positional guessing — the first option in a real prompt is sometimes the
+ * rejection.
  */
 export function permissionResponseFrame(
   id: number | string,
   options: Array<{ optionId?: string; name?: string; kind?: string }> | undefined,
+  allowed = false,
 ): Record<string, unknown> {
+  if (!allowed) {
+    return { jsonrpc: "2.0", id, result: { outcome: { outcome: "cancelled" } } };
+  }
   const list = options ?? [];
   const allow =
     list.find((o) => typeof o.kind === "string" && /^allow/i.test(o.kind)) ??
-    list.find((o) => /allow|accept|yes/i.test(`${o.optionId ?? ""} ${o.name ?? ""}`)) ??
-    list[0];
-  return {
-    jsonrpc: "2.0",
-    id,
-    result: { outcome: { outcome: "selected", optionId: allow?.optionId ?? "allow" } },
-  };
+    list.find((o) => /allow|accept|yes/i.test(`${o.optionId ?? ""} ${o.name ?? ""}`));
+  if (!allow?.optionId) {
+    // Nothing offered says "allow". Guessing at `list[0]` here is how an
+    // auto-answer selects a rejection and calls it approval.
+    return { jsonrpc: "2.0", id, result: { outcome: { outcome: "cancelled" } } };
+  }
+  return { jsonrpc: "2.0", id, result: { outcome: { outcome: "selected", optionId: allow.optionId } } };
 }
 
 /**
@@ -91,11 +99,11 @@ export function permissionResponseFrame(
 export function buildAcpPrompt(parsed: OcxParsedRequest): string {
   const blocks: string[] = [];
   const system = parsed.context.systemPrompt?.filter((line) => line.trim().length > 0).join("\n");
-  if (system) blocks.push(`[System]\n${system}`);
+  if (system) blocks.push(fence("System", system));
   for (const message of parsed.context.messages) {
     if (message.role === "toolResult") {
       const body = typeof message.content === "string" ? message.content : JSON.stringify(message.content ?? "");
-      blocks.push(`[Tool]\n[result id=${message.toolCallId}]\n${body}`);
+      blocks.push(fence("Tool", `[result id=${message.toolCallId}]\n${body}`));
       continue;
     }
     const parts = typeof message.content === "string" ? [] : message.content;
@@ -111,9 +119,15 @@ export function buildAcpPrompt(parsed: OcxParsedRequest): string {
     }
     if (!text.trim()) continue;
     const label = message.role === "assistant" ? "Assistant" : message.role === "developer" ? "System" : "User";
-    blocks.push(`[${label}]\n${text}`);
+    blocks.push(fence(label, text));
   }
-  return blocks.length > 0 ? blocks.join("\n\n") : "(empty)";
+  if (blocks.length === 0) return "(empty)";
+  const joined = blocks.join("\n\n");
+  // Keep the oldest turns rather than the newest when trimming: the tail is
+  // what the agent is answering.
+  return joined.length > MAX_ACP_PROMPT_CHARS
+    ? `[truncated]\n${joined.slice(joined.length - MAX_ACP_PROMPT_CHARS)}`
+    : joined;
 }
 
 export type AcpTurnOutcome = { stopReason?: string; usage?: OcxUsage };
@@ -163,20 +177,20 @@ export function acpUpdateToEvents(update: Record<string, unknown>): AdapterEvent
     const text = chunkText(update.content);
     return text ? [{ type: "thinking_delta", thinking: text }] : [];
   }
-  if (kind === "tool_call") {
-    const id = typeof update.toolCallId === "string" ? update.toolCallId : "";
-    const name = typeof update.title === "string" ? update.title : typeof update.kind === "string" ? update.kind : "tool";
-    if (!id) return [];
-    const events: AdapterEvent[] = [{ type: "tool_call_start", id, name }];
-    if (update.rawInput !== undefined) {
-      events.push({ type: "tool_call_delta", arguments: JSON.stringify(update.rawInput) });
-    }
-    return events;
-  }
-  if (kind === "tool_call_update") {
-    const status = update.status;
-    if (status === "completed" || status === "failed") return [{ type: "tool_call_end" }];
-    return [];
-  }
+  // The CLI's own tool calls are NOT client tools. Devin executes them itself
+  // inside its session, so emitting tool_call_start here would either fail the
+  // turn — the Responses bridge rejects a tool Codex never declared — or ask
+  // Codex to run something the agent has already run. Vendor tools stay
+  // internal and Codex keeps ownership of mutation, which is the same rule the
+  // CodeBuddy and Qoder adapters follow.
   return [];
+}
+/** Ceiling on the flattened conversation handed to one ACP prompt. */
+export const MAX_ACP_PROMPT_CHARS = 200_000;
+
+/** Fence a block label so a message body cannot forge one. */
+function fence(label: string, body: string): string {
+  // A user or tool result that contains a line reading `[System]` would
+  // otherwise appear to open a system block in the flattened prompt.
+  return `[${label}]\n${body.replace(/^\[(System|User|Assistant|Tool)\]/gm, " $&")}`;
 }

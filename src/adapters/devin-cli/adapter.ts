@@ -9,10 +9,17 @@
  * runTurn-only, like the Cursor and cloud Devin adapters: a JSON-RPC handshake
  * over a child process has no fetch-shaped request to hand to the generic wire
  * path.
+ *
+ * The child is treated as untrusted and unprivileged. It gets a scoped
+ * environment rather than the proxy's, its permission requests are refused
+ * unless an operator opted in, and it is reaped rather than merely signalled,
+ * because a Devin grandchild that ignores SIGTERM would otherwise keep writing
+ * in the operator's tree after the turn returned.
  */
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import type { AdapterEvent, OcxParsedRequest, OcxProviderConfig, OcxUsage } from "../../types";
 import type { IncomingMeta, ProviderAdapter } from "../base";
+import { baseScopedEnv } from "../coding-agent/turn";
 import {
   ACP_INITIALIZE_ID,
   ACP_SESSION_NEW_ID,
@@ -30,10 +37,32 @@ import {
 } from "./acp";
 import { DEVIN_CLI_INSTALL_HINT, resolveDevinCliBinary } from "./binary";
 
-/** A turn that produces nothing for this long is abandoned. */
+/** A turn that has not produced a prompt reply by this point is abandoned. */
 const DEVIN_CLI_TURN_TIMEOUT_MS = 10 * 60 * 1000;
+/** Grace between SIGTERM and SIGKILL when reaping the child. */
+const DEVIN_CLI_KILL_GRACE_MS = 2_000;
+/** How long to wait for the child to actually exit before giving up on it. */
+const DEVIN_CLI_REAP_MS = 5_000;
 
-export function createDevinCliAdapter(provider: OcxProviderConfig): ProviderAdapter {
+/**
+ * Opt-in for letting the CLI act on the machine.
+ *
+ * Off by default: this provider runs an agent in the operator's own tree, and a
+ * proxy that auto-approves whatever a prompt asks for is a remote shell.
+ */
+const DEVIN_CLI_ALLOW_TOOLS_ENV = "OPENCODEX_DEVIN_CLI_ALLOW_TOOLS";
+
+export type DevinCliSpawn = (binary: string, args: string[], options: { cwd: string; env: Record<string, string> }) => ChildProcessWithoutNullStreams;
+
+export function devinCliToolsAllowed(env: NodeJS.ProcessEnv = process.env): boolean {
+  const raw = env[DEVIN_CLI_ALLOW_TOOLS_ENV]?.trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes";
+}
+
+export function createDevinCliAdapter(provider: OcxProviderConfig, deps?: { spawn?: DevinCliSpawn }): ProviderAdapter {
+  const spawnChild: DevinCliSpawn = deps?.spawn
+    ?? ((binary, args, options) => spawn(binary, args, { ...options, stdio: ["pipe", "pipe", "pipe"], windowsHide: true }) as ChildProcessWithoutNullStreams);
+
   return {
     name: "devin-cli",
 
@@ -60,94 +89,171 @@ export function createDevinCliAdapter(provider: OcxProviderConfig): ProviderAdap
         ? parsed.modelId.slice(parsed.modelId.lastIndexOf("/") + 1)
         : parsed.modelId;
       const cwd = process.env.OPENCODEX_DEVIN_CLI_CWD?.trim() || process.cwd();
+      const toolsAllowed = devinCliToolsAllowed();
 
       await new Promise<void>((resolve) => {
-        const child = spawn(binary, ["acp"], {
-          cwd,
-          stdio: ["pipe", "pipe", "ignore"],
-          env: {
-            ...process.env,
-            // Headless: nobody can answer an interactive approval, and the
-            // protocol-level auto-answer below only covers requests the agent
-            // actually routes through session/request_permission.
-            DEVIN_PERMISSION_MODE: process.env.DEVIN_PERMISSION_MODE ?? "bypass",
-          },
-        });
+        let child: ChildProcessWithoutNullStreams;
+        try {
+          child = spawnChild(binary, ["acp"], {
+            cwd,
+            env: {
+              // A scoped environment, not the proxy's. The child would
+              // otherwise inherit every credential this process holds.
+              ...baseScopedEnv(),
+              NO_COLOR: "1",
+              DEVIN_PERMISSION_MODE: toolsAllowed ? (process.env.DEVIN_PERMISSION_MODE ?? "bypass") : "ask",
+            },
+          });
+        } catch (error) {
+          emit({ type: "error", message: `Devin CLI failed to start (${binary}): ${(error as Error).message}. ${DEVIN_CLI_INSTALL_HINT}` });
+          return resolve();
+        }
 
         let settled = false;
+        let closed = false;
+        let sawPromptReply = false;
         let buffer = "";
         let totalBytes = 0;
-        let openToolId: string | undefined;
         let usage: OcxUsage | undefined;
         let stopReason: string | undefined;
+        let stderrTail = "";
 
-        const timer = setTimeout(() => finish(`Devin CLI turn exceeded ${DEVIN_CLI_TURN_TIMEOUT_MS}ms`), DEVIN_CLI_TURN_TIMEOUT_MS);
+        const turnTimer = setTimeout(
+          () => finish(`Devin CLI turn exceeded ${DEVIN_CLI_TURN_TIMEOUT_MS}ms`),
+          DEVIN_CLI_TURN_TIMEOUT_MS,
+        );
         const onAbort = () => finish("Devin CLI turn was aborted.");
 
-        const closeOpenTool = () => {
-          if (!openToolId) return;
-          emit({ type: "tool_call_end" });
-          openToolId = undefined;
-        };
-
-        function cleanup(): void {
-          clearTimeout(timer);
-          incoming.abortSignal?.removeEventListener("abort", onAbort);
-          if (!child.killed) child.kill();
+        /**
+         * Reap the child rather than just signalling it, then resolve.
+         *
+         * `child.killed` only records that a signal was sent. Resolving on that
+         * lets a grandchild keep running in the operator's tree after runTurn
+         * returned, which is why this waits for `close` and escalates.
+         */
+        function reapAndResolve(): void {
+          if (closed || child.exitCode !== null || child.signalCode !== null) return resolve();
+          let done = false;
+          const settle = () => {
+            if (done) return;
+            done = true;
+            clearTimeout(killTimer);
+            clearTimeout(reapTimer);
+            resolve();
+          };
+          child.once("close", settle);
+          try { child.kill("SIGTERM"); } catch { /* already gone */ }
+          const killTimer = setTimeout(() => { try { child.kill("SIGKILL"); } catch { /* already gone */ } }, DEVIN_CLI_KILL_GRACE_MS);
+          const reapTimer = setTimeout(settle, DEVIN_CLI_REAP_MS);
         }
 
         /** Terminate the turn exactly once, with an error when given a reason. */
         function finish(errorMessage?: string): void {
           if (settled) return;
           settled = true;
-          cleanup();
-          closeOpenTool();
+          clearTimeout(turnTimer);
+          incoming.abortSignal?.removeEventListener("abort", onAbort);
+          child.stdout.destroy();
           if (errorMessage) emit({ type: "error", message: errorMessage, ...(usage ? { usage } : {}) });
           else emit({ type: "done", ...(usage ? { usage } : {}), ...(stopReason ? { stopReason } : {}) });
-          resolve();
+          reapAndResolve();
         }
 
         incoming.abortSignal?.addEventListener("abort", onAbort, { once: true });
+        // The signal can fire between the pre-spawn check and this listener.
+        if (incoming.abortSignal?.aborted) return finish("Devin CLI turn was aborted.");
 
         const send = (frame: Record<string, unknown>): void => {
           if (!child.stdin.destroyed) child.stdin.write(`${JSON.stringify(frame)}\n`);
         };
+        // EPIPE after the child is killed is an ordinary race, not a crash.
+        child.stdin.on("error", () => {});
 
         child.on("error", (err) => finish(`Devin CLI failed to start (${binary}): ${err.message}. ${DEVIN_CLI_INSTALL_HINT}`));
-        // A clean exit before the prompt reply means the agent ended the turn
-        // without answering; whatever text arrived is still the turn's output.
-        child.on("close", () => finish());
+
+        child.on("close", (code) => {
+          closed = true;
+          if (settled) return;
+          // Flush a final frame that arrived without a trailing newline before
+          // deciding the turn failed: the prompt reply carrying usage and the
+          // stop reason is often the last line written.
+          flush(buffer);
+          buffer = "";
+          if (settled) return;
+          // A close without a prompt reply is a failure, not an empty success.
+          const detail = stderrTail.trim().slice(-400);
+          finish(
+            `Devin CLI exited (code ${code ?? "null"}) before answering the prompt` +
+            (detail ? `: ${detail}` : "."),
+          );
+        });
+
+        child.stderr?.setEncoding("utf8");
+        child.stderr?.on("data", (chunk: string) => {
+          // Bounded: diagnostics are for the error message, not a buffer to grow.
+          stderrTail = (stderrTail + chunk).slice(-4096);
+        });
 
         child.stdout.setEncoding("utf8");
         child.stdout.on("data", (chunk: string) => {
+          if (settled) return;
           totalBytes += Buffer.byteLength(chunk, "utf8");
           if (totalBytes > MAX_ACP_TOTAL_BYTES) return finish("Devin CLI produced more output than one turn may consume.");
           buffer += chunk;
-          if (buffer.length > MAX_ACP_LINE_BYTES) return finish("Devin CLI emitted a single line larger than the frame cap.");
           let index: number;
           while ((index = buffer.indexOf("\n")) >= 0) {
-            const line = buffer.slice(0, index).trim();
+            const line = buffer.slice(0, index);
             buffer = buffer.slice(index + 1);
-            if (!line) continue;
-            let frame: Record<string, unknown>;
-            try {
-              frame = JSON.parse(line) as Record<string, unknown>;
-            } catch {
-              // The CLI prints a banner before the protocol starts; a
-              // non-JSON line is noise, not a protocol violation.
-              continue;
-            }
-            handle(frame);
+            flush(line);
+            if (settled) return;
+          }
+          if (Buffer.byteLength(buffer, "utf8") > MAX_ACP_LINE_BYTES) {
+            finish("Devin CLI emitted a single line larger than the frame cap.");
           }
         });
 
+        // The prompt reply carrying usage and the stop reason is often the last
+        // thing written, and it is not guaranteed to end with a newline. Flush
+        // the remainder when the stream ends rather than waiting for the child
+        // to exit and then calling a complete turn a failure.
+        child.stdout.on("end", () => {
+          const tail = buffer;
+          buffer = "";
+          flush(tail);
+        });
+
+        function flush(raw: string): void {
+          const line = raw.trim();
+          if (!line || settled) return;
+          let frame: Record<string, unknown>;
+          try {
+            frame = JSON.parse(line) as Record<string, unknown>;
+          } catch {
+            // The CLI prints a banner before the protocol starts; a non-JSON
+            // line is noise, not a protocol violation.
+            return;
+          }
+          handle(frame);
+        }
+
+        /** JSON-RPC ids are allowed to come back as strings. */
+        const idOf = (value: unknown): number | undefined => {
+          if (typeof value === "number") return value;
+          if (typeof value === "string" && /^\d+$/.test(value)) return Number(value);
+          return undefined;
+        };
+
         function handle(frame: Record<string, unknown>): void {
-          if (frame.id === ACP_INITIALIZE_ID && frame.result) {
+          if (settled) return;
+          const id = idOf(frame.id);
+          const error = frame.error as { message?: string } | undefined;
+
+          if (id === ACP_INITIALIZE_ID) {
+            if (error) return finish(`Devin CLI initialize failed: ${error.message ?? "unknown error"}`);
             send(sessionNewFrame(cwd, modelId));
             return;
           }
-          if (frame.id === ACP_SESSION_NEW_ID) {
-            const error = frame.error as { message?: string } | undefined;
+          if (id === ACP_SESSION_NEW_ID) {
             if (error) return finish(`Devin CLI session/new failed: ${error.message ?? "unknown error"}`);
             const sessionId = (frame.result as { sessionId?: string } | undefined)?.sessionId;
             if (!sessionId) return finish("Devin CLI session/new returned no sessionId.");
@@ -156,23 +262,18 @@ export function createDevinCliAdapter(provider: OcxProviderConfig): ProviderAdap
           }
           if (frame.method === "session/request_permission" && frame.id != null) {
             const params = frame.params as { options?: Array<{ optionId?: string; name?: string; kind?: string }> } | undefined;
-            send(permissionResponseFrame(frame.id as number | string, params?.options));
+            send(permissionResponseFrame(frame.id as number | string, params?.options, toolsAllowed));
             return;
           }
           if (frame.method === "session/update") {
             const update = (frame.params as { update?: Record<string, unknown> } | undefined)?.update;
             if (!update) return;
-            for (const event of acpUpdateToEvents(update)) {
-              if (event.type === "tool_call_start") openToolId = event.id;
-              if (event.type === "tool_call_end") openToolId = undefined;
-              if (event.type === "text_delta" || event.type === "thinking_delta") closeOpenTool();
-              emit(event);
-            }
+            for (const event of acpUpdateToEvents(update)) emit(event);
             return;
           }
-          if (frame.id === ACP_SESSION_PROMPT_ID) {
-            const error = frame.error as { message?: string } | undefined;
+          if (id === ACP_SESSION_PROMPT_ID) {
             if (error) return finish(`Devin CLI session/prompt failed: ${error.message ?? "unknown error"}`);
+            sawPromptReply = true;
             const result = frame.result as { stopReason?: unknown; usage?: unknown } | undefined;
             usage = mapAcpUsage(result?.usage) ?? usage;
             stopReason = mapAcpStopReason(result?.stopReason);
@@ -180,6 +281,7 @@ export function createDevinCliAdapter(provider: OcxProviderConfig): ProviderAdap
           }
         }
 
+        void sawPromptReply;
         send(initializeFrame(process.env.OPENCODEX_VERSION ?? "0.0.0"));
       });
     },
