@@ -194,6 +194,27 @@ Cursor 的 HTTP/1.1 兼容传输：通过 `agent.v1.AgentService/RunSSE` 接收 
   executor，并绕过 Codex 审批和 sandbox 语义；旧的 `unsafeAllowNativeLocalExec: true` 仅在
   `nativeLocalExec` 未设置时等同。
 
+## `devin`
+
+**目标：** Cognition 的 `exa.api_server_pb.ApiServerService/GetChatMessage`（`server.codeium.com`，Connect 流式）。
+**认证：** 来自 `provider.apiKey` 或转发的 authorization 头的 Devin/Cognition API 密钥。登录会打开 Auth0 浏览器页面，再通过 `SeatManagementService.RegisterUser` 换取长期密钥。
+
+- 使用 `runTurn` 而非常规的 fetch/parse 路径。请求与服务端事件由 `devin/cloud-direct/wire.ts` 手写的 protobuf 分帧处理。
+- 通过 `GetCascadeModelConfigs` 按账号获取模型；不在套餐内的模型在列表阶段就被过滤，而不是到请求时才失败。
+- Cognition 对工具说明有长度上限和精确短语黑名单。适配器会改写已知短语并截断过长的说明。
+- 密钥不会刷新。失效后请重新执行 `ocx login devin`。
+
+## `devin-cli`
+
+**目标：** 本地安装的 Devin CLI，通过 Agent Client Protocol（`devin acp`，stdio 上按行分隔的 JSON-RPC）驱动。
+**认证：** opencodex 不保存任何凭据。CLI 自己持有 `devin auth login` 的凭据。
+
+- 仅走 `runTurn`。子进程握手没有可交给通用传输路径的请求。
+- 一次对话就是一个 ACP 会话：`initialize`、`session/new`、`session/prompt`，其间由 `session/update` 推送增量。
+- CLI 自身的工具调用不会外发。Devin 在会话内自行执行，若作为客户端工具转发，要么让这一轮失败，要么同一操作被执行两次。
+- **权限请求默认拒绝。** 该提供方在使用者自己的工作树中运行代理，只有设置 `OPENCODEX_DEVIN_CLI_ALLOW_TOOLS=1` 才放行，子进程拿到的是受限环境而非代理自身的环境。
+- 可执行文件按 `OPENCODEX_DEVIN_CLI_BIN`、官方安装路径、`PATH` 的顺序查找。
+
 ## `azure-openai`（别名：`azure`）
 
 **目标：** **Azure OpenAI**。封装 `openai-responses`，因此同样是 `passthrough: true`。

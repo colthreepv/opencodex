@@ -308,6 +308,27 @@ başlığından Cursor OAuth/erişim belirteci.
   `unsafeAllowNativeLocalExec: true` yalnızca `nativeLocalExec` ayarlanmadığında
   eşdeğer kalır.
 
+## `devin`
+
+**Hedef:** Cognition'ın `exa.api_server_pb.ApiServerService/GetChatMessage` uç noktası; `server.codeium.com` üzerinde Connect akışı.
+**Kimlik doğrulama:** `provider.apiKey` veya iletilen authorization başlığındaki Devin/Cognition API anahtarı. Giriş tarayıcıda Auth0 oturumunu açar, ardından belirteci `SeatManagementService.RegisterUser` ile uzun ömürlü bir anahtara dönüştürür.
+
+- Olağan fetch/parse yolu yerine `runTurn` kullanır. İstekler ve sunucu olayları `devin/cloud-direct/wire.ts` içindeki elle yazılmış protobuf çerçevelemesiyle işlenir.
+- Modeller hesaba göre `GetCascadeModelConfigs` ile keşfedilir; pakette olmayanlar istek anında hata vermek yerine listeden düşer.
+- Cognition araç açıklamaları için uzunluk sınırı ve birebir ifade engeli uygular. Bağdaştırıcı bilinen ifadeleri yeniden yazar, uzun açıklamaları kırpar.
+- Anahtarlar yenilenmez. Süresi dolduğunda veya iptal edildiğinde `ocx login devin` komutunu yeniden çalıştırın.
+
+## `devin-cli`
+
+**Hedef:** yerelde kurulu Devin CLI; Agent Client Protocol ile (`devin acp`, stdio üzerinde satır ayrımlı JSON-RPC) sürülür.
+**Kimlik doğrulama:** opencodex tarafında hiçbir şey saklanmaz. Kimlik bilgilerini `devin auth login` sonrası CLI'nin kendisi taşır.
+
+- Yalnızca `runTurn`: alt süreç üzerinden yapılan el sıkışmanın genel taşıma yoluna verilecek bir isteği yoktur.
+- Bir tur bir ACP oturumudur: `initialize`, `session/new`, `session/prompt`; aralarında `session/update` bildirimleri akar.
+- CLI'nin kendi araç çağrıları dışarı verilmez. Devin bunları kendi oturumunda çalıştırır; istemci aracı olarak iletmek ya turu başarısız kılar ya da aynı işi iki kez çalıştırır.
+- **İzin istekleri varsayılan olarak reddedilir.** Bu sağlayıcı kullanıcının kendi ağacında bir ajan çalıştırır; izin için `OPENCODEX_DEVIN_CLI_ALLOW_TOOLS=1` gerekir ve alt sürece vekilin ortamı değil kısıtlı bir ortam verilir.
+- Çalıştırılabilir dosya sırasıyla `OPENCODEX_DEVIN_CLI_BIN`, resmi kurulum yolları ve `PATH` içinde aranır.
+
 ## `azure-openai` (takma ad: `azure`)
 
 **Hedefler:** **Azure OpenAI**. `openai-responses`'ı sarar (bu nedenle

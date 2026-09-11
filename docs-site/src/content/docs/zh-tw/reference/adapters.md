@@ -166,6 +166,27 @@ Kiro 的 assistant 文字本身沒有可靠的回合結束標記，但終止的 
   executor，並繞過 Codex 審批和 sandbox 語義；舊的 `unsafeAllowNativeLocalExec: true` 僅在
   `nativeLocalExec` 未設定時等效。
 
+## `devin`
+
+**目標：** Cognition 的 `exa.api_server_pb.ApiServerService/GetChatMessage`（`server.codeium.com`，Connect 串流）。
+**認證：** 來自 `provider.apiKey` 或轉送 authorization 標頭的 Devin/Cognition API 金鑰。登入會開啟 Auth0 瀏覽器頁面，再透過 `SeatManagementService.RegisterUser` 換取長期金鑰。
+
+- 使用 `runTurn` 而非一般的 fetch/parse 路徑。請求與伺服器事件由 `devin/cloud-direct/wire.ts` 手寫的 protobuf 分幀處理。
+- 以 `GetCascadeModelConfigs` 依帳號取得模型；方案未涵蓋的模型在清單階段就被濾除。
+- Cognition 對工具說明設有長度上限與完全比對的封鎖清單。轉接器會改寫已知語句並截斷過長說明。
+- 金鑰不會更新。失效後請重新執行 `ocx login devin`。
+
+## `devin-cli`
+
+**目標：** 本機安裝的 Devin CLI，透過 Agent Client Protocol（`devin acp`，stdio 上以換行分隔的 JSON-RPC）驅動。
+**認證：** opencodex 不保存任何憑證。CLI 自行持有 `devin auth login` 的憑證。
+
+- 僅走 `runTurn`。子行程握手沒有可交給通用傳輸路徑的請求。
+- 一次對話就是一個 ACP 工作階段：`initialize`、`session/new`、`session/prompt`，其間由 `session/update` 推送增量。
+- CLI 自身的工具呼叫不會外送。Devin 在工作階段內自行執行，若當成用戶端工具轉送，不是讓這一輪失敗就是同一操作被執行兩次。
+- **權限請求預設拒絕。** 此提供者在使用者自己的工作樹中執行代理，只有設定 `OPENCODEX_DEVIN_CLI_ALLOW_TOOLS=1` 才放行，子行程取得的是受限環境。
+- 執行檔依 `OPENCODEX_DEVIN_CLI_BIN`、官方安裝路徑、`PATH` 的順序尋找。
+
 ## `azure-openai`（別名：`azure`）
 
 **目標：** **Azure OpenAI**。封裝 `openai-responses`，因此同樣是 `passthrough: true`。
