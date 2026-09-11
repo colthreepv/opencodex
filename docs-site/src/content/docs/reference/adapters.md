@@ -424,6 +424,12 @@ declarations do not grant approval or change execution policy.
 
 ## `devin`
 
+> **Chat is unverified.** On a measured free-tier account (2026-09-12) `RegisterUser` and
+> `GetCascadeModelConfigs` succeed, but every `GetChatMessage` returns an opaque
+> `invalid_argument` and no turn completes. Client version, request framing, metadata and request
+> fields were each ruled out by live probing; entitlement is the leading explanation. Paid-account
+> chat has not been tested. Use [`devin-cli`](#devin-cli) for a Devin path that completes turns.
+
 **Targets:** Cognition's `exa.api_server_pb.ApiServerService/GetChatMessage` over HTTPS Connect
 streaming at `server.codeium.com`.
 **Auth:** Devin/Cognition API key from `provider.apiKey` or the forwarded authorization header.
