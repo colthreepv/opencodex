@@ -1110,6 +1110,7 @@
   "model-cache.test.ts": "codex-integration",
   "model-costs-management-api.test.ts": "server",
   "model-discovery-management-api.test.ts": "server",
+  "server-new-model-policy-arrival.test.ts": "server",
   "model-display-names-management-api.test.ts": "codex-integration",
   "model-metadata-sync.test.ts": "codex-integration",
   "model-pinned-effort-config.test.ts": "config",
