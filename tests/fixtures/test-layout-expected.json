@@ -597,6 +597,7 @@
   "codex-spark-visibility.test.ts": "codex-integration",
   "codex-sqlite-home.test.ts": "codex-integration",
   "codex-sync-api.test.ts": "codex-integration",
+  "codex-sync-new-model-policy.test.ts": "codex-integration",
   "codex-sync-response.test.ts": "codex-integration",
   "codex-tool-mode.test.ts": "codex-integration",
   "codex-transition-state-adoption.test.ts": "codex-integration",
