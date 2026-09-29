@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { loadConfig, saveConfig } from "../../src/config";
+import { setPersistedConfigMutationBeforeCommitForTests } from "../../src/config/persisted-mutation";
 import { clearModelCache } from "../../src/codex/model-cache";
 import type { OcxConfig } from "../../src/types";
 import { createTempHome, type TempHome } from "../helpers/temp-home";
@@ -22,6 +23,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  setPersistedConfigMutationBeforeCommitForTests(null);
   try {
     await lifecycle.close();
   } finally {
@@ -42,8 +44,9 @@ const cases: Array<{
   { name: "inherited global on", global: "on", visible: true },
 ];
 
-// Intentionally asserts the intended contract, including the currently failing off cases.
-// Discovery is triggered through the real HTTP route, never by calling policy reconciliation.
+// Discovery is driven through the real HTTP route, never by calling policy reconciliation, so the
+// assertions below check the persisted contract under test (#6260): an absorbed baseline, a
+// recorded arrival, a surviving manual block, and a manual re-enable that holds across refresh.
 test.each(cases)("new arrival before catalog convergence: $name", policy => lifecycle.run(async () => {
   let ids = [...existing];
   const discoveries: string[][] = [];
@@ -93,4 +96,59 @@ test.each(cases)("new arrival before catalog convergence: $name", policy => life
   expect(after).toEqual(policy.visible
     ? [`${provider}/model-a`, `${provider}/model-c`]
     : [`${provider}/model-a`]);
+
+  // A successful discovery must persist, not only shape this response. The baseline absorbs the
+  // arrival (so the next discovery does not re-flag it), the arrival is recorded for the operator,
+  // and the manual block on model-b survives the same convergence that disabled model-c.
+  const persisted = loadConfig();
+  expect(persisted.modelDiscovery?.knownModels?.[provider]?.ids).toEqual([...existing, arrival]);
+  expect(persisted.modelDiscovery?.recentArrivals?.[provider] ?? [])
+    .toContainEqual(expect.objectContaining({ id: arrival }));
+  expect(persisted.disabledModels ?? []).toContain(`${provider}/model-b`);
+  if (policy.visible) expect(persisted.disabledModels ?? []).not.toContain(`${provider}/model-c`);
+  else expect(persisted.disabledModels ?? []).toContain(`${provider}/model-c`);
+
+  // Manual re-enable through the management route the CLI uses. It only sticks because the baseline
+  // above absorbed model-c; a later discovery that still saw it as new would re-flag and re-hide it.
+  const adminToken = readFileSync(home.path("admin-api-token"), "utf8").trim();
+  const enable = await fetch(new URL("/api/model-visibility", server.url), {
+    method: "PUT",
+    headers: { "content-type": "application/json", "x-opencodex-api-key": adminToken },
+    body: JSON.stringify({ scope: "models", provider, enabled: true, targets: [{ id: arrival }] }),
+    signal: lifecycle.abort.signal,
+  });
+  expect(enable.status).toBe(200);
+  expect(loadConfig().disabledModels ?? []).not.toContain(`${provider}/model-c`);
+
+  clearModelCache(provider);
+  expect(await read()).toEqual([`${provider}/model-a`, `${provider}/model-c`]);
+}), SERVER_BUDGET_MS);
+
+test("failed arrival persistence returns retryable HTTP 503 without publishing models", () => lifecycle.run(async () => {
+  const upstream = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () =>
+    Response.json({ data: [...existing, arrival].map(id => ({ id })) }),
+  });
+  lifecycle.ownStop(() => upstream.stop(true));
+  saveConfig({
+    port: 0, hostname: "127.0.0.1", defaultProvider: provider,
+    providers: { [provider]: {
+      adapter: "openai-chat", baseUrl: new URL("/v1", upstream.url).href,
+      apiKey: "fixture-key", allowPrivateNetwork: true, liveModels: true, models: [...existing],
+      newModelPolicy: "off",
+    } },
+    modelDiscovery: { knownModels: {
+      [provider]: { ids: [...existing], removed: [], updatedAt: now },
+    } },
+  });
+  const { startServer } = await import("../../src/server");
+  lifecycle.abort.signal.throwIfAborted();
+  const server = startServer(0);
+  lifecycle.ownStop(() => server.stop(true));
+  setPersistedConfigMutationBeforeCommitForTests(() => writeFileSync(home.path("config.json"), "invalid"));
+  const response = await fetch(new URL("/v1/models", server.url), { signal: lifecycle.abort.signal });
+  expect(response.status).toBe(503);
+  expect(response.headers.get("retry-after")).toBe("1");
+  const body = await response.json() as { error: { code: string }; data?: unknown };
+  expect(body.error.code).toBe("catalog_busy");
+  expect(body.data).toBeUndefined();
 }), SERVER_BUDGET_MS);
