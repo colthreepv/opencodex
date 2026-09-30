@@ -53,6 +53,25 @@ bun run setup:hooks             # pre-push runs doctor when gui/ changed
 
 Fix ESLint errors first. Use `doctor` / `doctor:full` for deeper React triage.
 
+## Quota popover hover browser regression
+
+```bash
+cd gui
+bun run build
+bun run test:quota-hover
+```
+
+Rebuild after changing CSS: this opt-in check combines the current React quota component with
+the production CSS in `dist`. It uses an installed Chrome/Chromium (`CHROME_BIN` when not on PATH)
+and never connects to the proxy or provider accounts. Across 48 cases it moves a real pointer
+through the chip-to-popover gap, clicks the account-management link, returns to the chip, and
+checks dismissal outside. It also verifies keyboard Tab, Enter, and Escape. Cases cover light/dark themes, mobile and desktop widths, fractional
+placement, display scaling, and the last chip after horizontal scrolling. Results and a screenshot
+are written to `.tmp/quota-summary-hover-browser/`. This browser check is manual, not part of CI;
+happy-dom unit tests do not perform CSS hit-testing. To prove the guard detects the original gap,
+run `bun tests/quota-summary-hover-browser.ts .tmp/quota-hover-without-bridge --without-bridge`;
+that run must fail while crossing the gap.
+
 ## Sidebar version browser regression
 
 ```bash

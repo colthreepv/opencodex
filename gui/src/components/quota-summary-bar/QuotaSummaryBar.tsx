@@ -83,6 +83,8 @@ function usePopoverPlacement(open: boolean, anchorRef: RefObject<HTMLElement | n
       // Unitless: the stylesheet multiplies by 1px.
       popover.style.setProperty("--qs-pop-top", String(Math.round(rect.bottom + POPOVER_GAP)));
       popover.style.setProperty("--qs-pop-left", String(Math.round(left)));
+      // Share the measured gap with the hover bridge, including fractional-pixel rounding.
+      popover.style.setProperty("--qs-pop-gap", String(Math.round(rect.bottom + POPOVER_GAP) - rect.bottom));
     };
     place();
     window.addEventListener("scroll", place, { capture: true, passive: true });
@@ -124,7 +126,14 @@ function QuotaSummaryItem({ row, t, locale }: { row: QuotaSummaryRow; t: TFn; lo
       if (rootRef.current && !rootRef.current.contains(event.target as Node)) setTapped(false);
     };
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") close();
+      if (event.key === "Escape") {
+        const returnFocus = popoverRef.current?.contains(document.activeElement);
+        close();
+        if (returnFocus) {
+          chipRef.current?.focus();
+          setSuppressed(true);
+        }
+      }
     };
     document.addEventListener("pointerdown", onPointer);
     document.addEventListener("keydown", onKey);
@@ -169,19 +178,22 @@ function QuotaSummaryItem({ row, t, locale }: { row: QuotaSummaryRow; t: TFn; lo
       className={`quota-summary-item quota-summary-item--${row.severity}`}
       onPointerEnter={onPointerEnter}
       onPointerLeave={onPointerLeave}
+      onFocus={event => {
+        if (!isKeyboardFocus(event.target)) return;
+        setSuppressed(false);
+        setFocused(true);
+      }}
+      onBlur={event => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false);
+      }}
     >
       <a
         ref={chipRef}
         href={`#${providerAccountsHash(row.provider)}`}
         className={`quota-summary-chip${open ? " quota-summary-chip--open" : ""}`}
-        aria-describedby={open ? popoverId : undefined}
+        aria-expanded={open}
+        aria-controls={open ? popoverId : undefined}
         onPointerDown={event => { pointerTypeRef.current = event.pointerType; }}
-        onFocus={event => {
-          if (!isKeyboardFocus(event.currentTarget)) return;
-          setSuppressed(false);
-          setFocused(true);
-        }}
-        onBlur={() => setFocused(false)}
         onClick={onClick}
       >
         <span className="quota-summary-name">{row.label}</span>
@@ -191,7 +203,7 @@ function QuotaSummaryItem({ row, t, locale }: { row: QuotaSummaryRow; t: TFn; lo
         <span className="sr-only">{t("quotaSummary.openAccounts")}</span>
       </a>
       {open && (
-        <div ref={popoverRef} id={popoverId} className="quota-summary-popover" role="tooltip">
+        <div ref={popoverRef} id={popoverId} className="quota-summary-popover" role="group" aria-label={row.label}>
           <div className="quota-summary-popover-head">
             <strong>{row.label}</strong>
             {warning && <span className={`quota-summary-badge quota-summary-badge--${row.severity}`}>{warning}</span>}
@@ -213,7 +225,14 @@ function QuotaSummaryItem({ row, t, locale }: { row: QuotaSummaryRow; t: TFn; lo
             {row.updatedAt !== undefined && (
               <span>{t(row.observed ? "quotaSummary.observedAt" : "quotaSummary.dataAt", { time: formatClock(row.updatedAt, locale) })}</span>
             )}
-            <span className="quota-summary-popover-hint">{t("quotaSummary.openAccounts")}</span>
+            <a
+              href={`#${providerAccountsHash(row.provider)}`}
+              className="quota-summary-popover-link"
+              onPointerDown={event => { pointerTypeRef.current = event.pointerType; }}
+              onClick={onClick}
+            >
+              {t("quotaSummary.openAccounts")}
+            </a>
           </div>
         </div>
       )}
