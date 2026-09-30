@@ -266,6 +266,7 @@ test("a clicked chip keeps its detail closed under the resting pointer until the
   await pointer("pointerover", document.body);
   expect(tooltip()?.textContent).toContain("xAI Grok");
   expect(view.chip("xAI Grok").getAttribute("aria-controls")).toBe(tooltip()?.id ?? "missing");
+  expect(view.chip("xAI Grok").getAttribute("aria-describedby")).toBe(tooltip()?.id ?? "missing");
 
   await click(view.chip("xAI Grok"));
   expect(tooltip()).toBeNull();

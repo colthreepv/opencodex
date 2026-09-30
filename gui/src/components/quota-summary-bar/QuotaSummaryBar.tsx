@@ -193,6 +193,7 @@ function QuotaSummaryItem({ row, t, locale }: { row: QuotaSummaryRow; t: TFn; lo
         className={`quota-summary-chip${open ? " quota-summary-chip--open" : ""}`}
         aria-expanded={open}
         aria-controls={open ? popoverId : undefined}
+        aria-describedby={open ? popoverId : undefined}
         onPointerDown={event => { pointerTypeRef.current = event.pointerType; }}
         onClick={onClick}
       >
