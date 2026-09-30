@@ -92,12 +92,12 @@ test("popover placement shares the rounded gap with its hover bridge and updates
     } as never) as unknown as Event);
   });
   const popover = view.container.querySelector<HTMLElement>(".quota-summary-popover")!;
-  expect(popover.style.getPropertyValue("--qs-pop-top")).toBe("32");
-  expect(popover.style.getPropertyValue("--qs-pop-gap")).toBe("3.75");
+  expect(popover.style.getPropertyValue("--qs-pop-top")).toBe("35");
+  expect(popover.style.getPropertyValue("--qs-pop-gap")).toBe("6.75");
   bottom = 28.75;
   await act(async () => { window.dispatchEvent(new testWindow.Event("scroll") as unknown as Event); });
-  expect(popover.style.getPropertyValue("--qs-pop-top")).toBe("33");
-  expect(popover.style.getPropertyValue("--qs-pop-gap")).toBe("4.25");
+  expect(popover.style.getPropertyValue("--qs-pop-top")).toBe("36");
+  expect(popover.style.getPropertyValue("--qs-pop-gap")).toBe("7.25");
   await view.unmount();
 });
 

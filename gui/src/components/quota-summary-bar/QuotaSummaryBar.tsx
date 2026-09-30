@@ -28,7 +28,7 @@ interface QuotaSummaryData {
 
 const POLL_MS = 60_000;
 /** Gap between the chip and its fixed-position popover, and the popover's viewport margin. */
-const POPOVER_GAP = 4;
+const POPOVER_GAP = 7;
 const VIEWPORT_MARGIN = 8;
 /** A « / » press pages the strip by this share of its visible width. */
 const PAGE_FRACTION = 0.8;
