@@ -192,6 +192,8 @@ upgrade and restart that proxy before retrying. Resetting a manual model price a
 model, preserving other rates saved independently.
 The **Usage** summary and Models/Providers tables show end-to-end output throughput from usage history for the selected range and filters: summed output tokens divided by summed wall-clock seconds, not an average of individual rates. The sample count is measured attempts (or requests for legacy rows without attempts); samples lacking positive finite output tokens or duration are excluded. An em dash means no sample qualified or the server returned an unusable rate. This includes pre-decode waiting and is not estimated decode speed.
 
+Manual prices are edited from **Models → Price**. The editor keeps the four base rates and offers three long-prompt pricing modes. **Automatic** keeps the provider's published long-context multipliers on top of your base rates. **Flat rate** uses the base rates at every prompt length and turns off only the automatic long-context band. **Custom threshold** replaces that band with four rates for prompts past a token threshold you set. In custom mode, total prompt input tokens, including cache reads and writes, choose the band and the whole request is repriced; output tokens do not. Fast and Priority rules still apply, and all rates are standard-speed rates.
+
 The **Usage** Models and Providers tables show the estimated priced portion for each row. Requests
 without a matching price or usable usage are counted as excluded beside that amount when the proxy
 reports pricing coverage fields. A row with only excluded requests shows an em dash with that count

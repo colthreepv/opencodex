@@ -173,7 +173,27 @@ export interface ProviderCostOverlay {
   output: number;
   cacheRead: number;
   cacheWrite: number;
+  /** Optional prompt-size pricing; absent means automatic (legacy). */
+  promptPricing?: ProviderPromptPricing;
 }
+
+/**
+ * Optional prompt-size pricing for one `modelCosts` row. Absent means automatic (legacy):
+ * the automatic provider context multiplier applies atop the manual base rates.
+ * `flat` disables context bands only. `custom` replaces the automatic band with absolute rates.
+ */
+export type ProviderPromptPricing =
+  | { policy: "automatic" }
+  | { policy: "flat" }
+  | {
+      policy: "custom";
+      threshold: number;
+      comparison: "gt" | "gte";
+      input: number;
+      output: number;
+      cacheRead: number;
+      cacheWrite: number;
+    };
 
 export interface RequestPacingRule {
   /** Evenly spread request starts to this many requests per minute. */

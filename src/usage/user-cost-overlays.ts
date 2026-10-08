@@ -19,6 +19,7 @@
  * Display-time estimation only — these rows never affect billing.
  */
 import type { OcxConfig, OcxProviderConfig, ProviderCostOverlay } from "../types";
+import { normalizePromptPricing } from "./prompt-pricing";
 import { MAX_COST4_RATE, type ExpectedPriceOverlay } from "./expected-prices";
 import { redactSecretString } from "../lib/redact";
 import { isSelectableCodexPoolAccount, MAIN_CODEX_ACCOUNT_ID } from "../codex/account-id";
@@ -273,6 +274,7 @@ export function refreshUserCostOverlays(config: OcxConfig): void {
       if (!costs || typeof costs !== "object" || Array.isArray(costs)) continue;
       for (const [modelId, cost4] of Object.entries(costs)) {
         if (!modelId.trim() || !validCost4(cost4)) continue;
+        const promptPricing = normalizePromptPricing(cost4.promptPricing);
         rows.push({
           provider: providerName,
           modelId,
@@ -293,6 +295,7 @@ export function refreshUserCostOverlays(config: OcxConfig): void {
           source: `config:providers.${redactSecretString(providerName)}.modelCosts[${redactSecretString(modelId)}]`,
           verifiedAt: "user-configured",
           status: "verified",
+          ...(promptPricing ? { promptPricing } : {}),
         });
       }
     }

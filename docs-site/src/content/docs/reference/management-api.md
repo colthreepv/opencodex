@@ -453,10 +453,10 @@ override and restores the usual catalog fallback. These remain display estimates
 
 `GET /api/providers/{provider}/model-costs` returns `{ provider, modelCosts }`, with sanitized
 four-rate entries keyed by exact upstream model ID. `PUT` on the same route accepts
-`{ modelId, cost }`, where `cost` is `{ input, output, cacheRead, cacheWrite }` or `null` to reset.
+`{ modelId, cost }`, where `cost` is `{ input, output, cacheRead, cacheWrite }` with an optional `promptPricing` band, or `null` to reset.
 All four rates must be finite numbers from 0 through 1,000,000, in USD per 1M tokens.
 Unknown fields and malformed rates are rejected. A write preserves other models' overrides
-and returns `{ ok: true, provider, modelId, cost }`; reset returns `cost: null`.
+and returns `{ ok: true, provider, modelId, cost }`; reset returns `cost: null`. The optional `promptPricing` key is `{ "policy": "flat" }`, which turns off only the automatic long-context band, or `{ "policy": "custom", "threshold": 200000, "comparison": "gt", "input": 2.5, "output": 19, "cacheRead": 0.25, "cacheWrite": 5 }`, which replaces that band with the four rates for requests past the threshold. Use `"gte"` for at or above. The threshold is a positive whole number of tokens, and total prompt input tokens, including cache reads and writes, choose the band. The whole request is priced at the band it falls in; output tokens never choose the band. All rates are standard-speed rates, and Fast and Priority rules are unchanged. Omitting the key means automatic pricing, where the provider's published long-context multipliers still apply on top of the base rates. `{ "policy": "automatic" }` is accepted on write and stored as absent, so responses never include it.
 
 ```bash
 ocx models price ollama/custom-model --json

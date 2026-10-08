@@ -119,6 +119,7 @@ export type {
   ProviderWebSearchBridgeConfig,
   ProviderCostOverlay,
   RequestPacingRule,
+  ProviderPromptPricing,
   ProviderRequestPacingConfig,
   FastWire,
   AttemptTierOutcome,

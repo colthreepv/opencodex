@@ -24,6 +24,11 @@ async function invoke(sub: string, args: string[], response?: unknown, status = 
           method: init?.method ?? "GET",
           body,
         });
+        // set-price reads the current row first; answer that read with an empty map so the
+        // scripted response only exercises the PUT receipt under test.
+        if ((init?.method ?? "GET") === "GET" && sub === "set-price") {
+          return Response.json({ provider: path.split("/")[3], modelCosts: {} });
+        }
         if (response instanceof Response) return response;
         return Response.json(response === undefined
           ? { ok: true, provider: path.split("/")[3], modelId: body?.modelId, cost: body?.cost }
@@ -84,22 +89,23 @@ describe("models manual price commands", () => {
   test("set-price sends four numeric rates with omitted cache rates defaulted to zero", async () => {
     const result = await invoke("set-price", ["custom-price/org/model", "--input", "1.25", "--output", "5", "--json"]);
     expect(result.code).toBe(0);
-    expect(result.calls).toEqual([{
+    expect(result.calls.map(call => call.method)).toEqual(["GET", "PUT"]);
+    expect(result.calls[1]).toEqual({
       path: "/api/providers/custom-price/model-costs", method: "PUT",
       body: { modelId: "org/model", cost: { input: 1.25, output: 5, cacheRead: 0, cacheWrite: 0 } },
-    }]);
+    });
   });
 
   test("explicit cache rates, all-zero pricing, and the maximum rate are transmitted unchanged", async () => {
     const explicit = await invoke("set-price", ["custom-price/org/model", "--input", "1.25", "--output", "5", "--cache-read", "0.125", "--cache-write", "2"]);
     expect(explicit.code).toBe(0);
-    expect(explicit.calls[0]!.body).toEqual({ modelId: "org/model", cost: COST });
+    expect(explicit.calls.at(-1)!.body).toEqual({ modelId: "org/model", cost: COST });
     const zero = await invoke("set-price", ["custom-price/model", "--input", "0", "--output", "0"]);
     expect(zero.code).toBe(0);
-    expect(zero.calls[0]!.body).toEqual({ modelId: "model", cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } });
+    expect(zero.calls.at(-1)!.body).toEqual({ modelId: "model", cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } });
     const max = await invoke("set-price", ["custom-price/model", "--input", "1000000", "--output", "1e6"]);
     expect(max.code).toBe(0);
-    expect(max.calls[0]!.body).toEqual({ modelId: "model", cost: { input: 1_000_000, output: 1_000_000, cacheRead: 0, cacheWrite: 0 } });
+    expect(max.calls.at(-1)!.body).toEqual({ modelId: "model", cost: { input: 1_000_000, output: 1_000_000, cacheRead: 0, cacheWrite: 0 } });
   });
 
   test("--auto sends null and preserves the exact upstream ID", async () => {

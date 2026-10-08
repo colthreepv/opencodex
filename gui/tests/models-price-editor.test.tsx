@@ -150,7 +150,7 @@ describe("Models manual price editor", () => {
   }
 
   function inputs(): HTMLInputElement[] {
-    return [...container.querySelectorAll<HTMLInputElement>("dialog input")];
+    return [...container.querySelectorAll<HTMLInputElement>('dialog input[type="number"]')];
   }
 
   function button(label: string): HTMLButtonElement {

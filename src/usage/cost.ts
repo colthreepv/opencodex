@@ -14,11 +14,12 @@ import {
   getModelMetadata,
   resolveMetadataProvider,
 } from "../generated/model-metadata";
-import type { AttemptTierOutcome, OcxUsage } from "../types";
+import type { AttemptTierOutcome, OcxUsage, ProviderPromptPricing } from "../types";
 import { canonicalFastTierMarker } from "../providers/fastwire";
 import { baseProviderLabel } from "../providers/label";
 import type { PersistedUsageAttempt, UsageStatus } from "./log";
 import { canonicalAntigravityUsageModel } from "../providers/antigravity-models";
+import { promptPricingCrossed, type CustomPromptPricing } from "./prompt-pricing";
 import { activeAccountPricingProviders, activeConfiguredProviders, activeUserCostOverlays, userCostOverlayVersion } from "./user-cost-overlays";
 import {
   EXPECTED_PRICE_OVERLAYS,
@@ -30,6 +31,8 @@ import {
   cursorFastPriceSupported,
   findContextTier,
   isLongContext,
+  CONTEXT_TIERS,
+  type ContextTier,
   type Cost4,
   type ExpectedPriceOverlay,
   type ExpectedPriceStatus,
@@ -82,6 +85,8 @@ export interface MatchedPrice {
   sourceRef?: string;
   verifiedAt?: string;
   status: "verified" | "verified-derived";
+  /** User-configured prompt-size policy carried from the modelCosts row. */
+  promptPricing?: ProviderPromptPricing;
 }
 
 export interface AttemptCostEstimate {
@@ -345,6 +350,7 @@ function userOverlayMatch(
     sourceRef: overlay.source,
     verifiedAt: overlay.verifiedAt,
     status: "verified",
+    ...(overlay.promptPricing ? { promptPricing: overlay.promptPricing } : {}),
   };
 }
 
@@ -468,6 +474,71 @@ function tierScalar(tier?: ServiceTierInput): string | undefined {
   return typeof tier === "string" ? tier : tier && effectiveServiceTier(tier);
 }
 
+/** Which prompt-size band priced a request: the automatic table, or a user custom band. */
+export type ContextBandSource = "automatic" | "custom";
+
+type PromptBand = [Cost4, ContextTierName | undefined, boolean, ContextBandSource | undefined];
+
+/**
+ * Whether a priority multiplier may stack on a band. Custom absolute rates are standard-speed
+ * rates, so with no published relation the provider's own priority rule still applies.
+ */
+function priorityStacksWithBand(
+  provider: string,
+  modelId: string,
+  bandSource: ContextBandSource | undefined,
+  tiers: readonly ContextTier[],
+): boolean {
+  const relation = findContextTier(provider, modelId, tiers)?.confirmedPriorityRelation;
+  if (bandSource === "custom" && relation === undefined) return true;
+  return relation === "stack";
+}
+
+function applyCustomPromptBand(
+  cost4: Cost4,
+  provider: string,
+  modelId: string,
+  rawInputTokens: number | undefined,
+  tier: ServiceTierInput | undefined,
+  pricing: CustomPromptPricing,
+  tiers: readonly ContextTier[],
+): PromptBand {
+  if (rawInputTokens === undefined || !promptPricingCrossed(pricing, rawInputTokens)) {
+    return [cost4, undefined, false, undefined];
+  }
+  const relation = findContextTier(provider, modelId, tiers)?.confirmedPriorityRelation;
+  const confirmedFast = isConfirmedFast(tier);
+  // Exclusive: a confirmed priority request keeps the standard rate, as the automatic band does.
+  if (confirmedFast && relation === "exclusive") return [cost4, undefined, false, undefined];
+  return [
+    { input: pricing.input, output: pricing.output, cacheRead: pricing.cacheRead, cacheWrite: pricing.cacheWrite },
+    "long",
+    confirmedFast && relation === "lower-bound",
+    "custom",
+  ];
+}
+
+/**
+ * Choose the prompt-size band for one request. Flat disables bands. Custom replaces the automatic
+ * band with absolute rates. An absent policy keeps the legacy automatic band atop the base rates.
+ */
+export function applyPromptPricingBand(
+  cost4: Cost4,
+  provider: string,
+  modelId: string,
+  rawInputTokens: number | undefined,
+  tier?: ServiceTierInput,
+  promptPricing?: ProviderPromptPricing,
+  tiers: readonly ContextTier[] = CONTEXT_TIERS,
+): PromptBand {
+  if (promptPricing?.policy === "flat") return [cost4, undefined, false, undefined];
+  if (promptPricing?.policy === "custom") {
+    return applyCustomPromptBand(cost4, provider, modelId, rawInputTokens, tier, promptPricing, tiers);
+  }
+  const [tiered, contextTier, lowerBound] = applyContextTier(cost4, provider, modelId, rawInputTokens, tier, tiers);
+  return [tiered, contextTier, lowerBound, contextTier ? "automatic" : undefined];
+}
+
 /** True only when the UPSTREAM RESPONSE confirmed the Fast tier (see ServiceTierContext). */
 function isConfirmedFast(tier?: ServiceTierInput): boolean {
   return typeof tier === "object" && canonicalFastTierMarker(tier.responseServiceTier) === "priority";
@@ -491,9 +562,10 @@ function applyContextTier(
   modelId: string,
   rawInputTokens: number | undefined,
   tier?: ServiceTierInput,
+  tiers: readonly ContextTier[] = CONTEXT_TIERS,
 ): [Cost4, ContextTierName | undefined, boolean] {
   if (rawInputTokens === undefined) return [cost4, undefined, false];
-  const rule = findContextTier(provider, modelId);
+  const rule = findContextTier(provider, modelId, tiers);
   if (!rule || !isLongContext(rule, rawInputTokens)) return [cost4, undefined, false];
   const confirmedFast = isConfirmedFast(tier);
   if (confirmedFast && rule.confirmedPriorityRelation === "exclusive") {
@@ -513,15 +585,17 @@ function applyContextTier(
  * - serviceTier is not "priority"
  * - no exact provider/model rule exists
  */
-function applyPriorityMultiplier(
+export function applyPriorityMultiplier(
   cost4: Cost4,
   provider: string,
   modelId: string,
   serviceTier?: ServiceTierInput,
   contextTier?: ContextTierName,
+  bandSource?: ContextBandSource,
+  tiers: readonly ContextTier[] = CONTEXT_TIERS,
 ): [Cost4, number] {
   if (canonicalFastTierMarker(tierScalar(serviceTier)) !== "priority") return [cost4, 1];
-  if (contextTier && findContextTier(provider, modelId)?.confirmedPriorityRelation !== "stack") return [cost4, 1];
+  if (contextTier && !priorityStacksWithBand(provider, modelId, bandSource, tiers)) return [cost4, 1];
   const rule = findPriorityPricingRule(provider, modelId);
   if (rule?.requiresResponseConfirmation && !isConfirmedFast(serviceTier)) return [cost4, 1];
   const multiplier = rule?.multiplier ?? 1;
@@ -575,11 +649,11 @@ export function estimateAttemptCost(
   const attemptServiceTier = attempt.tierOutcome
     ? serviceTierContextFromOutcome(attempt.tierOutcome)
     : serviceTier;
-  const [tieredCost4, contextTier, contextPriorityLowerBound] = applyContextTier(
-    price.cost4, price.provider, attempt.model, attempt.usage.inputTokens, attemptServiceTier,
+  const [tieredCost4, contextTier, contextPriorityLowerBound, bandSource] = applyPromptPricingBand(
+    price.cost4, price.provider, attempt.model, attempt.usage.inputTokens, attemptServiceTier, price.promptPricing,
   );
   const [effectiveCost4, multiplier] = applyPriorityMultiplier(
-    tieredCost4, price.provider, attempt.model, attemptServiceTier, contextTier,
+    tieredCost4, price.provider, attempt.model, attemptServiceTier, contextTier, bandSource,
   );
   const priorityLowerBound = contextPriorityLowerBound
     || isOpenRouterPriorityLowerBound(price.provider, attempt.tierOutcome);
@@ -660,11 +734,11 @@ export function estimateRequestCost(
   if (!tokens) return null;
   const price = resolveMatchedPrice(input.provider, input.model, overlays, userOverlays, input);
   if (!price) return null;
-  const [tieredCost4, contextTier, contextPriorityLowerBound] = applyContextTier(
-    price.cost4, price.provider, input.model, input.usage.inputTokens, input.serviceTier,
+  const [tieredCost4, contextTier, contextPriorityLowerBound, bandSource] = applyPromptPricingBand(
+    price.cost4, price.provider, input.model, input.usage.inputTokens, input.serviceTier, price.promptPricing,
   );
   const [effectiveCost4, multiplier] = applyPriorityMultiplier(
-    tieredCost4, price.provider, input.model, input.serviceTier, contextTier,
+    tieredCost4, price.provider, input.model, input.serviceTier, contextTier, bandSource,
   );
   const priorityLowerBound = contextPriorityLowerBound || isOpenRouterPriorityLowerBound(
     price.provider,

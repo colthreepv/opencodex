@@ -48,6 +48,15 @@
   ],
   "docs": [
     {
+      "path": "config-model-costs.md",
+      "tier": 2,
+      "title": "Model Cost Overrides",
+      "scope": "Manual modelCosts rows, the promptPricing policy (automatic, flat, custom) and its priority relations.",
+      "documents": [
+        "src/cli/models-runtime.ts"
+      ]
+    },
+    {
       "path": "overview.md",
       "tier": 1,
       "title": "Overview",

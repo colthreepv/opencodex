@@ -1,4 +1,5 @@
 import { normalizeCursorClaudeId } from "../adapters/cursor/claude-id";
+import type { ProviderPromptPricing } from "../types/provider";
 
 /**
  * Expected-price overlay for models whose jawcode cost rows are missing or all-zero
@@ -38,6 +39,8 @@ export interface ExpectedPriceOverlay {
   source: string;
   verifiedAt: string;
   status: ExpectedPriceStatus;
+  /** User-configured prompt-size policy; absent means automatic. */
+  promptPricing?: ProviderPromptPricing;
 }
 
 const GEMINI_31_PRO: Cost4 = { input: 2, output: 12, cacheRead: 0.2, cacheWrite: 0 };

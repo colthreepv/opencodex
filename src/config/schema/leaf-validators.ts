@@ -34,6 +34,7 @@ import { fastWireDeclarationError } from "../../providers/fastwire";
 import { getProviderRegistryEntry, providerMatchesRegistryTransport, providerModelWireDefault } from "../../providers/registry";
 import { resolveOpenAiVirtualModel } from "../../providers/openai-virtual-models";
 import { COST4_RATE_KEYS, isValidCost4Rate } from "../../usage/user-cost-overlays";
+import { normalizePromptPricing, promptPricingConfigError } from "../../usage/prompt-pricing";
 import { MAX_COST4_RATE } from "../../usage/expected-prices";
 import {
   DECLARABLE_HOSTED_TOOL_TYPES,
@@ -445,8 +446,10 @@ export function providerModelCostsConfigError(value: unknown, field = "modelCost
     // Reject unknown fields: a misplaced apiKey/apiKeyPool under a cost row
     // would otherwise be persisted and echoed verbatim by display paths that
     // mask only top-level provider secrets.
+    const promptPricingError = promptPricingConfigError(rates.promptPricing, field + "." + safeModelId + ".promptPricing");
+    if (promptPricingError) return promptPricingError;
     const extraKeys = Object.keys(rates)
-      .filter((key) => !(COST4_RATE_KEYS as readonly string[]).includes(key));
+      .filter((key) => !(COST4_RATE_KEYS as readonly string[]).includes(key) && key !== "promptPricing");
     if (extraKeys.length > 0) {
       return `${field}.${safeModelId} has unexpected fields ${JSON.stringify(extraKeys.map(redactSecretString).join(", "))} — only input, output, cacheRead, and cacheWrite are allowed (USD per 1M tokens)`;
     }
@@ -479,7 +482,9 @@ export function sanitizeModelCostsForDisplay(costs: unknown): Record<string, Pro
       // Secret-shaped ids are DROPPED rather than mapped to "[REDACTED]" so
       // distinct rows cannot collapse into one placeholder key.
       if (redactSecretString(modelId) !== modelId) continue;
-      out[modelId] = { input, output, cacheRead, cacheWrite };
+      if (promptPricingConfigError(rates.promptPricing, "promptPricing") !== null) continue;
+      const promptPricing = normalizePromptPricing(rates.promptPricing);
+      out[modelId] = { input, output, cacheRead, cacheWrite, ...(promptPricing ? { promptPricing } : {}) };
     }
   }
   return Object.keys(out).length > 0 ? out : undefined;

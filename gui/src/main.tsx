@@ -11,6 +11,7 @@ if (isTray) installApiAuthFetch();
 import { LanguageProvider } from "./i18n/provider";
 import "./styles.css";
 import "./styles/usage-chart-accessibility.css";
+import "./styles/model-price-dialog.css";
 import "./styles/sidebar-brand.css";
 import "./styles/fast-rows-setting.css";
 import "./styles/claude-desktop-mode-picker.css";
