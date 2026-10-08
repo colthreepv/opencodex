@@ -203,7 +203,7 @@ preset report cannot supply totals labelled with the requested custom interval.
 
 Resetting a manual model price keeps the map, even when temporarily empty, through persistence
 reconciliation. This removes only the requested entry and preserves sibling rates independently
-written to disk. The Desktop sign-in preference likewise distinguishes saved from applied state:
+written to disk. A manual price may also carry the optional `promptPricing` band (`flat` or `custom`); reset removes the whole row, band included. The Desktop sign-in preference likewise distinguishes saved from applied state:
 its pending flag survives cache refresh/remount until a successful sync confirms application.
 
 Subagent fallback settings load independently of the main roster. Their failure disables only
