@@ -434,7 +434,7 @@ export function providerModelCostsConfigError(value: unknown, field = "modelCost
     // management API response.
     const safeModelId = JSON.stringify(redactSecretString(modelId));
     if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
-      return `${field}.${safeModelId} must be an object with input, output, cacheRead, and cacheWrite (USD per 1M tokens)`;
+      return `${field}.${safeModelId} must be an object with input, output, cacheRead, and cacheWrite, plus an optional promptPricing (USD per 1M tokens)`;
     }
     const rates = entry as Record<string, unknown>;
     for (const key of COST4_RATE_KEYS) {
@@ -451,7 +451,7 @@ export function providerModelCostsConfigError(value: unknown, field = "modelCost
     const extraKeys = Object.keys(rates)
       .filter((key) => !(COST4_RATE_KEYS as readonly string[]).includes(key) && key !== "promptPricing");
     if (extraKeys.length > 0) {
-      return `${field}.${safeModelId} has unexpected fields ${JSON.stringify(extraKeys.map(redactSecretString).join(", "))} — only input, output, cacheRead, and cacheWrite are allowed (USD per 1M tokens)`;
+      return `${field}.${safeModelId} has unexpected fields ${JSON.stringify(extraKeys.map(redactSecretString).join(", "))} — only input, output, cacheRead, cacheWrite, and the optional promptPricing are allowed (USD per 1M tokens)`;
     }
   }
   return null;

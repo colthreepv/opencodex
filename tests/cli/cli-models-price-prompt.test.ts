@@ -4,7 +4,9 @@ import { handleModelsRuntimeCommand } from "../../src/cli/models-runtime";
 const CUSTOM = { policy: "custom", threshold: 1000, comparison: "gt", input: 3, output: 9, cacheRead: 0.3, cacheWrite: 3.75 };
 const STORED = { input: 1, output: 4, cacheRead: 0.1, cacheWrite: 1.25, promptPricing: CUSTOM };
 
-async function run(args: string[], modelCosts: Record<string, unknown>) {
+type RunOptions = { getProvider?: string; reorderPut?: boolean };
+
+async function run(args: string[], modelCosts: Record<string, unknown>, options: RunOptions = {}) {
   const calls: Array<{ method: string; body: any }> = [];
   const log = console.log;
   console.log = () => {};
@@ -15,8 +17,11 @@ async function run(args: string[], modelCosts: Record<string, unknown>) {
         const method = init?.method ?? "GET";
         const body = init?.body ? JSON.parse(String(init.body)) : undefined;
         calls.push({ method, body });
-        if (method === "GET") return Response.json({ provider: "custom-price", modelCosts });
-        return Response.json({ ok: true, provider: "custom-price", modelId: body.modelId, cost: body.cost });
+        if (method === "GET") return Response.json({ provider: options.getProvider ?? "custom-price", modelCosts });
+        const cost = options.reorderPut && body.cost?.promptPricing
+          ? { ...body.cost, promptPricing: Object.fromEntries(Object.entries(body.cost.promptPricing).reverse()) }
+          : body.cost;
+        return Response.json({ ok: true, provider: "custom-price", modelId: body.modelId, cost });
       },
     });
     return { code, calls, put: calls.find(call => call.method === "PUT") };
@@ -51,5 +56,17 @@ describe("models set-price keeps the nested promptPricing policy", () => {
     expect(result.code).toBe(0);
     expect(result.calls.map(call => call.method)).toEqual(["PUT"]);
     expect(result.put!.body).toEqual({ modelId: "org/model", cost: null });
+  });
+
+  test("a current-row read for another provider is rejected before any write", async () => {
+    const result = await run(["custom-price/org/model", "--input", "2", "--output", "6", "--json"], { "org/model": STORED }, { getProvider: "other-price" });
+    expect(result.code).toBe(1);
+    expect(result.put).toBeUndefined();
+  });
+
+  test("a receipt whose promptPricing keys arrive reordered is accepted", async () => {
+    const result = await run(["custom-price/org/model", "--input", "2", "--output", "6", "--json"], { "org/model": STORED }, { reorderPut: true });
+    expect(result.code).toBe(0);
+    expect(result.put!.body.cost.promptPricing).toEqual(CUSTOM);
   });
 });

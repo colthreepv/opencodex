@@ -175,7 +175,7 @@ async function priceRequest(write: boolean, argv: string[], deps: RuntimeApiDeps
   };
   if (rates) {
     const current = await runtimeRequest<unknown>(path, {}, deps);
-    if (!priceRecord(current) || !priceRecord(current.modelCosts)
+    if (!priceRecord(current) || current.provider !== provider || !priceRecord(current.modelCosts)
       || !Object.values(current.modelCosts).every(validPriceCost)) {
       throw new Error("Invalid model price response");
     }
@@ -183,6 +183,12 @@ async function priceRequest(write: boolean, argv: string[], deps: RuntimeApiDeps
       carriedPromptPricing = (current.modelCosts[modelId] as ProviderCostOverlay).promptPricing;
     }
   }
+  // Canonical comparison: key order in a JSON receipt carries no meaning.
+  const canonicalJson = (value: unknown): string => JSON.stringify(value, (_key, item: unknown) => (
+    item && typeof item === "object" && !Array.isArray(item)
+      ? Object.fromEntries(Object.entries(item as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+      : item
+  ));
   const cost: ProviderCostOverlay | null = rates ? {
     ...rates,
     ...(carriedPromptPricing ? { promptPricing: carriedPromptPricing } : {}),
@@ -192,7 +198,7 @@ async function priceRequest(write: boolean, argv: string[], deps: RuntimeApiDeps
   if (!priceRecord(result) || result.ok !== true || result.provider !== provider || result.modelId !== modelId
     || (cost === null ? receivedCost !== null : !validPriceCost(receivedCost)
       || !PRICE_RATE_KEYS.every(key => receivedCost[key] === cost[key])
-      || JSON.stringify(receivedCost.promptPricing ?? null) !== JSON.stringify(cost.promptPricing ?? null))) {
+      || canonicalJson(receivedCost.promptPricing ?? null) !== canonicalJson(cost.promptPricing ?? null))) {
     throw new Error("Invalid model price persistence receipt");
   }
   // Project the acknowledged fields only; unrelated response fields are not CLI output.
