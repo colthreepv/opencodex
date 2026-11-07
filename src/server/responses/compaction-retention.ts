@@ -42,7 +42,10 @@ export function prepareCompactionRetention(
     budget.chargeRetained(retainedBytes, { kind: "retained_collectors" });
     bytes = retainedBytes;
     const body = { ...raw, model: parsed.modelId, input: retention.input };
-    const messages = parseRequest(body, { replayCacheScope: parsed._reasoningReplayScope }).context.messages;
+    const messages = parseRequest(body, {
+      replayCacheScope: parsed._reasoningReplayScope,
+      instructionsAsDeveloper: parsed._instructionsAsDeveloper,
+    }).context.messages;
     parsed._rawBody = body;
     parsed.context.messages = messages;
     const callbacks: NonNullable<OcxParsedRequest["_compactionRetention"]> = {

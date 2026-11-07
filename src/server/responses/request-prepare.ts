@@ -487,7 +487,7 @@ export async function prepareResponsesRequest(
   let toolBridgeMaps: ReturnType<typeof buildToolBridgeMaps>;
   let clientToolCatalogRestriction: ClientToolCatalogRestriction | undefined;
   try {
-    parsed = parseRequest(body);
+    parsed = parseRequest(body, { instructionsAsDeveloper: inboundWire === "responses" });
     // Antigravity direct lane: the body carried only the request settings, so the parse above
     // produced them with an empty conversation; the conversation itself comes straight from the
     // client body. Inside this try so a decode error answers exactly like a parse error.
@@ -1145,7 +1145,7 @@ export async function prepareResponsesRequest(
       );
       if (!unreadableEncryptedAgentTask) {
         try {
-          const reparsed = parseRequest(body);
+          const reparsed = parseRequest(body, { instructionsAsDeveloper: inboundWire === "responses" });
           const kept: Array<keyof OcxParsedRequest> = [
             "_previousResponseInputExpanded",
             "_providerContinuation",
