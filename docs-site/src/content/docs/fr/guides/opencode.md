@@ -3,6 +3,10 @@ title: opencode
 description: Utilisez n’importe quel modèle routé depuis opencode — opencodex injecte un bloc de fournisseur à l’exécution sans modifier votre propre configuration opencode.
 ---
 
+:::note[OpenCode V2]
+V2 uses Responses and a non-secret `settings.apiKey` placeholder; remote admission uses provider-level headers. The legacy credential examples below describe V1. See the [canonical V2 configuration](/guides/opencode/#the-admission-key-is-not-written-to-disk).
+:::
+
 opencode lit ses fournisseurs dans des couches de configuration JSON fusionnées plutôt que dans des variables
 d’environnement ; il n’existe donc aucun emplacement de type `ANTHROPIC_BASE_URL` dans lequel injecter une valeur. `ocx opencode`
 comble cette lacune : il s’assure que le proxy fonctionne, crée un bloc fournisseur à partir du

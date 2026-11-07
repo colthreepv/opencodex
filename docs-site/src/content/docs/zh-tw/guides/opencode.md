@@ -3,6 +3,10 @@ title: opencode
 description: 在 opencode 使用任何由 opencodex 路由的模型——執行時注入 provider 區塊，不更動你自己的 opencode 設定。
 ---
 
+:::note[OpenCode V2]
+V2 uses Responses and a non-secret `settings.apiKey` placeholder; remote admission uses provider-level headers. The legacy credential examples below describe V1. See the [canonical V2 configuration](/guides/opencode/#the-admission-key-is-not-written-to-disk).
+:::
+
 opencode 從合併的 JSON 設定層讀取供應商，而不是環境變數，因此沒有可注入的 `ANTHROPIC_BASE_URL` 這類插槽。`ocx opencode` 補上這個缺口：它會確保代理程式正在執行、依可見目錄組出 provider 區塊，並透過 OpenCode 的內嵌 runtime 層（`OPENCODE_CONFIG_CONTENT`）注入。
 
 ## 快速入門
