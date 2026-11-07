@@ -3,6 +3,10 @@ title: opencode
 description: opencode içerisinden yönlendirilen herhangi bir modeli kullanın — opencodex bir çalışma zamanı sağlayıcı bloğu enjekte eder ve kendi opencode yapılandırmanıza dokunmaz.
 ---
 
+:::note[OpenCode V2]
+V2 uses Responses and a non-secret `settings.apiKey` placeholder; remote admission uses provider-level headers. The legacy credential examples below describe V1. See the [canonical V2 configuration](/guides/opencode/#the-admission-key-is-not-written-to-disk).
+:::
+
 opencode, sağlayıcılarını ortam değişkenleri yerine birleştirilmiş JSON
 yapılandırma katmanlarından okur, bu nedenle enjekte edilecek
 `ANTHROPIC_BASE_URL` tarzı bir yuva yoktur. `ocx opencode` bu boşluğu doldurur:
@@ -161,5 +165,4 @@ opencode kurulu olmalı ve `PATH` üzerinde bulunmalıdır:
 ```bash
 npm install -g opencode-ai
 ```
-
 

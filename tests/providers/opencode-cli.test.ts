@@ -461,7 +461,7 @@ describe("ocx opencode proxy model catalog", () => {
     expect(blocks.v2.models["opencode-go/undeclared"]!.capabilities).toBeUndefined();
   });
 
-  test("the launcher's V1 and V2 blocks share one connection", () => {
+  test("the launcher's V1 and V2 blocks share an endpoint and remote admission", () => {
     const blocks = buildOpencodeProviderBlocksFromCatalog(
       10100,
       [{ namespaced: "opencode-go/glm-5.3", provider: "opencode-go", id: "glm-5.3" }],
@@ -469,8 +469,10 @@ describe("ocx opencode proxy model catalog", () => {
       cfg({ hostname: "0.0.0.0" }),
     );
     // Built in one pass, so a later tweak to one generation cannot desync the endpoint.
-    expect(blocks.v2.settings).toEqual(blocks.v1.options);
-    expect(blocks.v2.settings.headers).toEqual({
+    expect(blocks.v2.settings.baseURL).toBe(blocks.v1.options.baseURL);
+    expect(blocks.v2.settings.apiKey).toBe("opencodex-loopback");
+    expect(blocks.v2.settings).not.toHaveProperty("headers");
+    expect(blocks.v2.headers).toEqual({
       "x-opencodex-api-key": OPENCODE_API_KEY_ENV_REF,
     });
   });
