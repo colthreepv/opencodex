@@ -33,9 +33,8 @@ Update each row after applying and testing it, including the new personal commit
 
 ## Exclusions
 
-- Do not merge `archive/local-fork-20261107`. It is historical only. No build or
-  update step depends on it. Do not carry its installer, update worker, automatic
-  rollback or service-restart helpers; installation and restart stay manual.
+- Do not add an installer, update worker, automatic rollback or service-restart
+  helpers. Installation and restart stay manual.
 - Do not carry `opencode/anthropic-support` or PR #8194 alongside instruction normalization.
   It is a different implementation. The selected path does not change the Anthropic adapter.
 - Other pricing, model-policy, provider, UI and test-cleanup branches are not selected
