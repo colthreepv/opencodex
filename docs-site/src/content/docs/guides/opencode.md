@@ -21,6 +21,11 @@ legacy spelling opencode V1 reads, and the native V2 spelling. Both carry reason
 variants in the format their client reads. Extra arguments pass through:
 `ocx opencode run "hello"`.
 
+OpenCode V2 uses `@opencode/ai/providers/openai-compatible-responses` and sends
+requests to `/v1/responses`. The legacy V1 block keeps `@ai-sdk/openai-compatible`
+and Chat Completions. Export, the launcher, **Connect**, and managed refresh share
+this generator; reconnecting does not switch V2 back to Chat.
+
 Routed models appear in the picker under the `opencodex` provider:
 
 ```text
@@ -150,28 +155,30 @@ export OPENCODEX_OPENCODE_API_KEY=<your key>
 
 ## The admission key is not written to disk
 
-When the proxy requires an API key, the inline runtime config carries opencode's
-`{env:…}` reference rather than the secret. Loopback binds use that reference as
-`apiKey`; non-loopback binds send it only through `x-opencodex-api-key` so proxy
-admission stays separate from any upstream `Authorization` header.
+OpenCode V2 requires a nonempty `settings.apiKey` even for a keyless local proxy.
+The generated V2 block uses the non-secret `opencodex-loopback` placeholder, avoiding
+`Missing auth credential: apiKey` when the environment variable is unset. This value
+does not grant admission. Non-loopback binds additionally require the real proxy key
+through a provider-level `headers.x-opencodex-api-key` environment reference.
 
 Loopback example:
 
 ```json
-"options": {
+"settings": {
   "baseURL": "http://127.0.0.1:10100/v1",
-  "apiKey": "{env:OPENCODEX_OPENCODE_API_KEY}"
+  "apiKey": "opencodex-loopback"
 }
 ```
 
 Non-loopback example:
 
 ```json
-"options": {
+"settings": {
   "baseURL": "http://192.168.1.10:10100/v1",
-  "headers": {
-    "x-opencodex-api-key": "{env:OPENCODEX_OPENCODE_API_KEY}"
-  }
+  "apiKey": "opencodex-loopback"
+},
+"headers": {
+  "x-opencodex-api-key": "{env:OPENCODEX_OPENCODE_API_KEY}"
 }
 ```
 
@@ -179,11 +186,17 @@ The real value is passed only through the child process environment.
 `OPENCODEX_API_AUTH_TOKEN` takes precedence, then the hardened service token file, then
 a configured API key — which is what a non-loopback bind requires.
 
-A loopback bind (`127.0.0.1`, the default) authenticates nothing, so the `{env:…}` reference is
-inert and you can leave the variable unset. It matters only when `hostname` is set beyond loopback;
+The legacy V1 block retains its environment reference in `options.apiKey` on loopback,
+or `options.headers` for non-loopback admission. A keyless loopback V2 connection
+needs no environment variable. Set the real key when `hostname` is set beyond loopback;
 see [Remote access](/reference/configuration/server/#remote-access). This admission key is opencodex's
 own, and is unrelated to the upstream provider keys configured under
 [Providers](/guides/providers/).
+
+For an existing managed connection, review **Connect → OpenCode** and apply the
+updated block. An unchanged owned block can upgrade from Chat to Responses; a
+hand-edited block reports a conflict and requires explicit overwrite confirmation.
+Undo restores the saved configuration, including its previous API choice.
 
 ## Reverting
 

@@ -3,6 +3,10 @@ title: opencode
 description: opencode에서 라우팅된 어떤 모델이든 사용하세요. opencodex가 런타임 provider 블록을 주입하고, 사용자의 opencode 설정은 그대로 둡니다.
 ---
 
+:::note[OpenCode V2]
+V2 uses Responses and a non-secret `settings.apiKey` placeholder; remote admission uses provider-level headers. The legacy credential examples below describe V1. See the [canonical V2 configuration](/guides/opencode/#the-admission-key-is-not-written-to-disk).
+:::
+
 opencode는 환경 변수 대신 병합된 JSON 구성 레이어에서 provider를 읽으므로,
 `ANTHROPIC_BASE_URL`처럼 끼워 넣을 자리가 없습니다. `ocx opencode`는 그 간극을
 메웁니다. 프록시가 실행 중인지 확인하고, 표시된 카탈로그에서 provider 블록을

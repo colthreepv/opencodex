@@ -3,6 +3,10 @@ title: opencode
 description: 在 opencode 中使用任意路由模型 - opencodex 会注入一个运行时 provider 块，并且不会改动你自己的 opencode 配置。
 ---
 
+:::note[OpenCode V2]
+V2 uses Responses and a non-secret `settings.apiKey` placeholder; remote admission uses provider-level headers. The legacy credential examples below describe V1. See the [canonical V2 configuration](/guides/opencode/#the-admission-key-is-not-written-to-disk).
+:::
+
 opencode 从合并后的 JSON 配置层读取 provider，而不是从环境变量读取，所以没有类似 `ANTHROPIC_BASE_URL` 这样的注入位置。`ocx opencode` 正是为此补桥：它会确保代理正在运行，根据可见目录构建 provider 块，并通过 OpenCode 的内联运行时层（`OPENCODE_CONFIG_CONTENT`）注入进去。
 
 ## 快速开始

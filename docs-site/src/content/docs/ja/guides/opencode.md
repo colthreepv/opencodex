@@ -3,6 +3,10 @@ title: オープンコード
 description: オープンコードからルーティングされたモデルを使用します。opencodex はランタイム プロバイダー ブロックを挿入し、独自のオープンコード設定をそのまま残します。
 ---
 
+:::note[OpenCode V2]
+V2 uses Responses and a non-secret `settings.apiKey` placeholder; remote admission uses provider-level headers. The legacy credential examples below describe V1. See the [canonical V2 configuration](/guides/opencode/#the-admission-key-is-not-written-to-disk).
+:::
+
 opencode は、環境変数ではなくマージされた JSON 構成レイヤーからプロバイダーを読み取るため、挿入する `ANTHROPIC_BASE_URL` スタイルのスロットはありません。 `ocx opencode` はそのギャップを橋渡しします。プロキシが実行されていることを確認し、表示されているカタログからプロバイダー ブロックを構築し、OpenCode のインライン ランタイム層 (`OPENCODE_CONFIG_CONTENT`) を通じてそれを挿入します。
 
 ## クイックスタート

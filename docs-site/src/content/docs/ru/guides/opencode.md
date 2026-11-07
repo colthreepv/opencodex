@@ -3,6 +3,10 @@ title: opencode
 description: Используйте любую маршрутизируемую модель из opencode — opencodex внедряет блок провайдера времени выполнения и не меняет вашу конфигурацию opencode.
 ---
 
+:::note[OpenCode V2]
+V2 uses Responses and a non-secret `settings.apiKey` placeholder; remote admission uses provider-level headers. The legacy credential examples below describe V1. See the [canonical V2 configuration](/guides/opencode/#the-admission-key-is-not-written-to-disk).
+:::
+
 opencode читает провайдеров из объединённых JSON-слоёв конфигурации, а не из переменных окружения,
 поэтому здесь нет слота вроде `ANTHROPIC_BASE_URL`, который можно просто подменить. `ocx opencode`
 закрывает этот пробел: он убеждается, что прокси запущен, строит блок провайдера из видимого
