@@ -271,15 +271,17 @@ describe("OpenCode V2 block (reasoning-effort variants)", () => {
     for (const entry of Object.values(config.provider.opencodex!.models)) expect(entry).not.toHaveProperty("settings");
   });
 
-  test("both blocks describe the same model set and the same connection", () => {
+  test("both blocks describe the same model set and endpoint with generation-specific auth", () => {
     const config = buildClientConfig("opencode", ladderCtx()) as OpencodeGeneratedConfig;
     const v1 = config.provider.opencodex!;
     const v2 = config.providers.opencodex!;
     expect(Object.keys(v2.models)).toEqual(Object.keys(v1.models));
-    expect(v2.settings).toEqual(v1.options);
+    expect(v2.settings).toEqual({ baseURL: BASE_URL, apiKey: LOOPBACK_API_KEY_PLACEHOLDER });
+    expect(v2.headers).toBeUndefined();
+    expect(v2.settings).not.toHaveProperty("headers");
     // opencode V2 merges both blocks by provider and model id, so the same ids must not
     // produce duplicate picker entries.
-    expect(v2.package).toBe("@opencode/ai/providers/openai-compatible");
+    expect(v2.package).toBe("@opencode/ai/providers/openai-compatible-responses");
     for (const [key, entry] of Object.entries(v2.models)) {
       expect(entry.name).toBe(v1.models[key]!.name);
       expect(entry.limit).toEqual(v1.models[key]!.limit);
@@ -288,10 +290,13 @@ describe("OpenCode V2 block (reasoning-effort variants)", () => {
 
   test("a non-loopback bind moves admission to the header branch in both blocks", () => {
     const config = buildClientConfig("opencode", ladderCtx(cfg({ hostname: "0.0.0.0" }))) as OpencodeGeneratedConfig;
-    for (const block of [config.provider.opencodex!.options, config.providers.opencodex!.settings]) {
-      expect(block.headers).toEqual({ "x-opencodex-api-key": OPENCODE_API_KEY_ENV_REF });
-      expect(block.apiKey).toBeUndefined();
-    }
+    const v1 = config.provider.opencodex!.options;
+    const v2 = config.providers.opencodex!;
+    expect(v1.headers).toEqual({ "x-opencodex-api-key": OPENCODE_API_KEY_ENV_REF });
+    expect(v1.apiKey).toBeUndefined();
+    expect(v2.headers).toEqual(v1.headers);
+    expect(v2.settings).toEqual({ baseURL: BASE_URL, apiKey: LOOPBACK_API_KEY_PLACEHOLDER });
+    expect(v2.settings).not.toHaveProperty("headers");
   });
 });
 
@@ -789,10 +794,11 @@ describe("hub-resolved Fast exports", () => {
       ],
     });
     expect(expanded.v1.options).toEqual({ baseURL: BASE_URL, apiKey: OPENCODE_API_KEY_ENV_REF });
-    expect(expanded.v2.settings).toEqual({ baseURL: BASE_URL, apiKey: OPENCODE_API_KEY_ENV_REF });
+    expect(expanded.v2.settings).toEqual({ baseURL: BASE_URL, apiKey: LOOPBACK_API_KEY_PLACEHOLDER });
     const remote = opencodeProviderBlocks(BASE_URL, [eligible], cfg({ hostname: "0.0.0.0" }));
     expect(remote.v1.options).toEqual({ baseURL: BASE_URL, headers: { "x-opencodex-api-key": OPENCODE_API_KEY_ENV_REF } });
-    expect(remote.v2.settings).toEqual(remote.v1.options);
+    expect(remote.v2.settings).toEqual({ baseURL: BASE_URL, apiKey: LOOPBACK_API_KEY_PLACEHOLDER });
+    expect(remote.v2.headers).toEqual(remote.v1.options.headers);
   });
 
   test("opencodeClientExport timeouts are omitted by default and emitted into both blocks when set", () => {
@@ -808,7 +814,7 @@ describe("hub-resolved Fast exports", () => {
     } as Partial<OcxConfig>));
     const expected = { baseURL: BASE_URL, apiKey: OPENCODE_API_KEY_ENV_REF, headerTimeout: false, chunkTimeout: 1_800_000, timeout: 3_600_000 };
     expect(full.v1.options).toEqual(expected);
-    expect(full.v2.settings).toEqual(expected);
+    expect(full.v2.settings).toEqual({ ...expected, apiKey: LOOPBACK_API_KEY_PLACEHOLDER });
 
     // A partial block emits only the fields the operator set.
     const partial = opencodeProviderBlocks(BASE_URL, [eligible], cfg({
@@ -816,7 +822,7 @@ describe("hub-resolved Fast exports", () => {
       opencodeClientExport: { headerTimeoutMs: false },
     } as Partial<OcxConfig>));
     expect(partial.v1.options).toEqual({ baseURL: BASE_URL, apiKey: OPENCODE_API_KEY_ENV_REF, headerTimeout: false });
-    expect(partial.v2.settings).toEqual(partial.v1.options);
+    expect(partial.v2.settings).toEqual({ ...partial.v1.options, apiKey: LOOPBACK_API_KEY_PLACEHOLDER });
   });
 
   test("configSchema keeps valid opencodeClientExport timeouts and degrades malformed per-field values", () => {
@@ -953,11 +959,11 @@ describe("EXPORT_CLIENTS registry", () => {
   },
   "providers": {
     "opencodex": {
-      "package": "@opencode/ai/providers/openai-compatible",
+      "package": "@opencode/ai/providers/openai-compatible-responses",
       "name": "OpenCodex",
       "settings": {
         "baseURL": "http://127.0.0.1:10100/v1",
-        "apiKey": "{env:OPENCODEX_OPENCODE_API_KEY}"
+        "apiKey": "opencodex-loopback"
       },
       "models": {
         "anthropic/claude-opus-5": {

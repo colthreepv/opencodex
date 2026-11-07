@@ -8,7 +8,7 @@ file, and removes it again. Each client below has its own switch:
 
 | Client | Config file | Format | When the change takes effect | Credential |
 |---|---|---|---|---|
-| OpenCode | `~/.config/opencode/opencode.json` | JSON | next direct launch | `OPENCODEX_OPENCODE_API_KEY` |
+| OpenCode | `~/.config/opencode/opencode.json` | JSON | config reload in V2 | V2 placeholder; `OPENCODEX_OPENCODE_API_KEY` for remote admission |
 | Pi | `~/.pi/agent/models.json` | JSON | new sessions | loopback placeholder |
 | Gentle Shell | `~/.gentle-shell/agent/models.json` (persistent selected home) | JSON | after restarting Gentle Shell | loopback placeholder |
 | OMP | `~/.omp/agent/models.yml` | YAML | after restarting OMP | `opencodex-loopback` placeholder |
@@ -32,6 +32,11 @@ file, and removes it again. Each client below has its own switch:
 | Command Code | `~/.commandcode/providers.json` (on Windows with the default home: use `HOME ?? USERPROFILE` only if nonblank and Windows-absolute, otherwise `homedir()`; a separately supplied home is preserved; append `.commandcode\providers.json`) | JSON | next launch of Command Code | none — keyless loopback (`apiKey: false`) |
 | Factory Droid | `~/.factory/settings.json` (`%USERPROFILE%\.factory\settings.json` on Windows) | JSON | immediately via file watching | none — keyless loopback |
 | T3 Code | `$T3CODE_HOME/userdata/settings.json` (default `~/.t3/userdata/settings.json`) | JSON | immediately — T3 Code watches the file | non-secret loopback marker |
+
+OpenCode V2 connections use Responses; V1 retains Chat Completions. Connect and
+owned refresh use the same [OpenCode config generator](/guides/opencode/).
+An unchanged managed Chat block upgrades safely; hand edits require explicit
+conflict review rather than an automatic overwrite.
 
 ## Gentle Shell
 
