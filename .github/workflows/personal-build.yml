@@ -2,6 +2,9 @@ name: Personal build
 
 on:
   workflow_dispatch:
+  push:
+    tags:
+      - 'v*-personal.*'
 
 permissions:
   contents: read
@@ -12,7 +15,7 @@ concurrency:
 
 jobs:
   package:
-    if: github.repository == 'colthreepv/opencodex' && github.ref == 'refs/heads/personal'
+    if: github.repository == 'colthreepv/opencodex' && (github.ref == 'refs/heads/personal' || (startsWith(github.ref, 'refs/tags/v') && contains(github.ref, '-personal.')))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -32,6 +35,20 @@ jobs:
 
       - name: Install pinned dependencies
         run: bun install --frozen-lockfile
+
+      - name: Validate personal version and release tag
+        env:
+          BUILD_REF: ${{ github.ref }}
+          BUILD_TAG: ${{ github.ref_name }}
+        run: |
+          bun scripts/release-version-sources.ts check
+          node <<'NODE'
+          const version = require('./package.json').version;
+          if (!/^\d+\.\d+\.\d+-personal\.\d+$/.test(version)) throw new Error('Expected a personal version');
+          if (process.env.BUILD_REF.startsWith('refs/tags/') && process.env.BUILD_TAG !== `v${version}`) {
+            throw new Error('Release tag does not match package version');
+          }
+          NODE
 
       - name: Check personal build contract
         run: bun test tests/ci-workflows/personal-build.test.ts
@@ -76,3 +93,30 @@ jobs:
           path: dist/personal/
           if-no-files-found: error
           retention-days: 14
+
+  release:
+    if: github.repository == 'colthreepv/opencodex' && startsWith(github.ref, 'refs/tags/v') && contains(github.ref, '-personal.')
+    needs: package
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Download verified package from this run
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: opencodex-personal-${{ github.sha }}
+          path: dist/personal/
+
+      - name: Publish fork release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_COMMIT: ${{ github.sha }}
+        run: |
+          cd dist/personal
+          sha256sum --check SHA256SUMS
+          gh release create "$RELEASE_TAG" ./*.tgz SHA256SUMS provenance.json personal.md \
+            --verify-tag --latest --title "$RELEASE_TAG" \
+            --notes "Personal fork based on upstream v2.98.0. Includes OpenCode Responses/Connect, Responses instruction normalization, ScribeTray dictation fixes, and native model display names. Source commit: $RELEASE_COMMIT. Install the npm tarball manually. No standalone executables or desktop installers are included. Do not use the upstream npm updater to replace this fork."
