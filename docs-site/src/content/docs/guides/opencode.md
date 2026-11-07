@@ -26,6 +26,11 @@ requests to `/v1/responses`. The legacy V1 block keeps `@ai-sdk/openai-compatibl
 and Chat Completions. Export, the launcher, **Connect**, and managed refresh share
 this generator; reconnecting does not switch V2 back to Chat.
 
+When translating Responses to another provider's protocol, opencodex treats OpenCode's
+top-level `instructions` as a leading `developer` message, using the same adapter mapping
+as equivalent Codex developer input. Explicit `system` messages stay separate. Native
+Responses forwarding retains the original `instructions` field; legacy Chat behavior is unchanged.
+
 Routed models appear in the picker under the `opencodex` provider:
 
 ```text
