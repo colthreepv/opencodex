@@ -67,6 +67,8 @@ export interface OcxParsedRequest {
   stream: boolean;
   options: OcxRequestOptions;
   _rawBody?: unknown;
+  /** Responses ingress instruction interpretation, retained across request-local reparsing. */
+  _instructionsAsDeveloper?: true;
   /** Claude replay tags, retained only until each route binding verifies them. */
   _nativeReasoningReplay?: ReadonlyMap<string, string>;
   _nativeReasoningBoundOwner?: NativeReasoningOwner;

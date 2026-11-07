@@ -225,7 +225,7 @@ function nameDestinationContent(
  */
 export function parseRequest(
   body: unknown,
-  parseOptions?: { replayCacheScope?: OcxReasoningReplayScopeRef },
+  parseOptions?: { replayCacheScope?: OcxReasoningReplayScopeRef; instructionsAsDeveloper?: boolean },
 ): OcxParsedRequest {
   const replayCacheScope = parseOptions?.replayCacheScope;
   const replayedInputPrefixLength = previousResponseReplayPrefixLength(body);
@@ -277,11 +277,20 @@ export function parseRequest(
   let contextCompactionBoundary = false;
   let continuationConversationMessageIndex: number | undefined;
 
-  if (typeof data.instructions === "string" && data.instructions.length > 0) {
+  // Framing may append proxy-owned checkpoint guidance; only caller instructions become developer.
+  const instructions = parseOptions?.instructionsAsDeveloper ? parsed.data.instructions : data.instructions;
+  if (parseOptions?.instructionsAsDeveloper && data.instructions !== parsed.data.instructions) {
+    systemPrompt.push(CHECKPOINT_CONTINUATION_NOTE);
+  }
+  if (typeof instructions === "string" && instructions.length > 0) {
     // #5217: this is the stored session instruction block. A sub-agent spawned on a DIFFERENT model
     // receives the parent's copy verbatim, so the identity sentence inside it names the parent
     // unless it is renamed here, where the destination model is known.
-    systemPrompt.push(nameDestinationText(data.instructions, data.model));
+    const text = nameDestinationText(instructions, data.model);
+    if (parseOptions?.instructionsAsDeveloper) {
+      // Like a single developer input_text item, inputContentParts normalizes this to a string.
+      messages.push({ role: "developer", content: text, timestamp: now });
+    } else systemPrompt.push(text);
   }
 
   if (typeof data.input === "string") {
@@ -755,6 +764,7 @@ export function parseRequest(
     stream: data.stream === true,
     options,
     _rawBody: body,
+    ...(parseOptions?.instructionsAsDeveloper ? { _instructionsAsDeveloper: true } : {}),
     ...(replayedInputPrefixLength > 0 ? { _replayPrefixLen: replayedInputPrefixLength } : {}),
     ...(continuationConversationMessageIndex !== undefined
       ? { _continuationConversationMessageIndex: continuationConversationMessageIndex }
