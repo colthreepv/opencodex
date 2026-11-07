@@ -37,3 +37,35 @@ For `personal.1`, the user requested no repeat of the previously completed produ
 tests. The carries applied with only test-registration conflicts. CI results are
 recorded in the tag's Actions run, not assumed from earlier builds.
 Use fork release tarballs for updates, not the upstream npm updater.
+
+## Windows installation / updates
+
+One npm installation under Node `24.22.1`; its bundled Bun runs the proxy.
+`OpenCodex.vbs` in `shell:startup` launches it hidden at user login and logs to
+`~/.opencodex/startup.log`. No scheduled task, administrator or restart loop.
+The launcher targets that Node directory, not whichever version NVM selects later.
+The old `24.11.1` package was removed; stop/start and non-elevated execution verified.
+
+Run in a normal PowerShell. Download the latest fork release before stopping:
+
+```powershell
+& {
+    $ErrorActionPreference = "Stop"
+    $release = Invoke-RestMethod "https://api.github.com/repos/colthreepv/opencodex/releases/latest"
+    $assets = @($release.assets | Where-Object { $_.name -like "bitkyc08-opencodex-*.tgz" })
+    if ($assets.Count -ne 1) { throw "Expected one release package" }
+    $file = "$env:TEMP\opencodex-personal.tgz"
+    Invoke-WebRequest $assets[0].browser_download_url -OutFile $file
+    $prefix = "$env:LOCALAPPDATA\nvm\v24.22.1"
+    & "$prefix\ocx.cmd" stop
+    if ($LASTEXITCODE -ne 0) { throw "Stop failed" }
+    npm install -g --prefix $prefix $file
+    if ($LASTEXITCODE -ne 0) { throw "Install failed" }
+    $launcher = Join-Path ([Environment]::GetFolderPath('Startup')) 'OpenCodex.vbs'
+    Start-Process wscript.exe -ArgumentList ('"' + $launcher + '"')
+}
+```
+
+After startup, check `Invoke-RestMethod http://127.0.0.1:10100/healthz` for the
+release version. Stop with `ocx stop`; start with the last two launcher lines.
+Do not use `ocx service install/repair/start`: those restore Task Scheduler.
