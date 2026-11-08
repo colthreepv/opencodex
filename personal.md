@@ -1,17 +1,21 @@
 # Personal OpenCodex
 
 Repository: `colthreepv/opencodex`. Default branch: `personal`.
-Base: upstream `v2.98.0`, commit `36aa9e8f7933807dc2c873bb93051c7c9c00f4e6`.
-Release: `v2.98.0-personal.1`. All changes below are applied.
+Base: upstream `v2.99.0`, commit `667662903a6c139524506667d12656d9ad50fad0`.
+Release: `v2.99.0-personal.1`. All changes below are applied.
 
 ## Included branches
 
 | Source branch | Source commits | Personal commits | Intent |
 | --- | --- | --- | --- |
-| `codex/dictation-scribetray-stream` | `838a54b21`, `c1c01f570`, `74d1ad153` | `ec9abf94f`, `a37ed1d37`, `3fd6f2810` | Ten-minute recordings, ScribeTray streaming frames and neutral local budget expiry. |
-| `fix/native-export-display-names` | `c466d0968`, `fc5fd094a` | `0b11a47ee`, `58f8c5a8b` | Preserve configured native model display names in exports and management GET. |
-| `opencode-responses` | `49eae702c` | `6a2e9f443` | OpenCode V2 uses Responses through export, Connect, launcher and refresh. Legacy V1 stays unchanged. |
-| `responses-instruction-normalization` | `7c037d750` | `3b3ae8787` | Responses caller instructions become leading developer input, which Anthropic maps to user content. Explicit system messages and Chat/Messages stay unchanged. |
+| `codex/dictation-scribetray-stream` | `838a54b21`, `c1c01f570`, `74d1ad153` | `c3d8a665f`, `42eff62ef`, `8101d589c` | Ten-minute recordings, ScribeTray streaming frames and neutral local budget expiry. |
+| `fix/native-export-display-names` | `c466d0968`, `fc5fd094a` | `f02c07434`, `d0fd5c239` | Preserve configured native model display names in exports and management GET. |
+| `opencode-responses` | `49eae702c` | `6986d9abf` | OpenCode V2 uses Responses through export, Connect, launcher and refresh. Legacy V1 stays unchanged. |
+| `responses-instruction-normalization` | `7c037d750` | `3e210b04f` | Responses caller instructions become leading developer input, which Anthropic maps to user content. Explicit system messages and Chat/Messages stay unchanged. |
+
+Fork tooling (`Personal build` workflow, its test and this file) is carried as
+`b525398c4`, `e5e0d92e0`, `31a2a0007` (workflow part of the previous release commit,
+version bumps dropped), `8c89d7508`, `79dc45d3f`.
 
 ## Updating
 
@@ -33,8 +37,11 @@ The fork's `Personal build` CI builds the tagged commit and publishes a normal G
 release with the npm tarball, provenance and checksums. It does not publish to npm
 or install anything. Manual workflow dispatch builds an artifact without a release.
 
-For `personal.1`, the user requested no repeat of the previously completed product
-tests. The carries applied with only test-registration conflicts. CI results are
+For `v2.99.0-personal.1`, carries were rebased from the previous personal commits;
+none were already upstream. Conflicts were only test-registration entries (both kept)
+and version files (stable kept, then synced). Local checks: `bun run typecheck` and the
+carried tests plus test-layout, structure and repo-hygiene guards. Test-layout guards
+need a checkout without unreadable leftover `.tmp-*` directories. CI results are
 recorded in the tag's Actions run, not assumed from earlier builds.
 Use fork release tarballs for updates, not the upstream npm updater.
 
