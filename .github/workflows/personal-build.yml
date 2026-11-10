@@ -119,4 +119,4 @@ jobs:
           sha256sum --check SHA256SUMS
           gh release create "$RELEASE_TAG" ./*.tgz SHA256SUMS provenance.json personal.md \
             --verify-tag --latest --title "$RELEASE_TAG" \
-            --notes "Personal fork based on upstream v2.98.0. Includes OpenCode Responses/Connect, Responses instruction normalization, ScribeTray dictation fixes, and native model display names. Source commit: $RELEASE_COMMIT. Install the npm tarball manually. No standalone executables or desktop installers are included. Do not use the upstream npm updater to replace this fork."
+            --notes "Personal fork based on upstream v2.100.0. Includes OpenCode Responses/Connect, Responses instruction normalization, ScribeTray dictation fixes, and native model display names. Source commit: $RELEASE_COMMIT. Install the npm tarball manually. No standalone executables or desktop installers are included. Do not use the upstream npm updater to replace this fork."

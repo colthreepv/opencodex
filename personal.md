@@ -1,43 +1,52 @@
 # Personal OpenCodex
 
 Repository: `colthreepv/opencodex`. Default branch: `personal`.
-Base: upstream `v2.98.0`, commit `36aa9e8f7933807dc2c873bb93051c7c9c00f4e6`.
-Release: `v2.98.0-personal.1`. All changes below are applied.
+Base: upstream `v2.100.0`, commit `0d691be839b9c8ea489f66e0032e0f727dd92807`.
+Release: `v2.100.0-personal.1`.
 
 ## Included branches
 
 | Source branch | Source commits | Personal commits | Intent |
 | --- | --- | --- | --- |
-| `codex/dictation-scribetray-stream` | `838a54b21`, `c1c01f570`, `74d1ad153` | `ec9abf94f`, `a37ed1d37`, `3fd6f2810` | Ten-minute recordings, ScribeTray streaming frames and neutral local budget expiry. |
-| `fix/native-export-display-names` | `c466d0968`, `fc5fd094a` | `0b11a47ee`, `58f8c5a8b` | Preserve configured native model display names in exports and management GET. |
-| `opencode-responses` | `49eae702c` | `6a2e9f443` | OpenCode V2 uses Responses through export, Connect, launcher and refresh. Legacy V1 stays unchanged. |
-| `responses-instruction-normalization` | `7c037d750` | `3b3ae8787` | Responses caller instructions become leading developer input, which Anthropic maps to user content. Explicit system messages and Chat/Messages stay unchanged. |
+| `opencode-responses` | `49eae702c` | `3e497f203` | OpenCode V2 uses Responses through export, Connect, launcher and refresh. Legacy V1 stays unchanged. |
+| `responses-instruction-normalization` | `7c037d750` | `a0f31fa0b` | Responses caller instructions become leading developer input. Explicit system messages and Chat/Messages stay unchanged. |
+
+Stable already includes dictation/ScribeTray fixes through PR #8232 (`f2f3c6a81`)
+and native model display names through PR #8234 (`97d26c75e`), including their
+regressions. Their five personal commits were skipped. The affected runtime files
+match the previous personal release byte for byte.
+
+Fork tooling is carried as `b3c4f86d8`, `cd1b2f417`, `aa31f871a`,
+`ec6d6130e`, and `c5baa01fb`. Registration conflicts preserve stable entries;
+documentation conflicts preserve the current dev-branch links and diagnostics.
 
 ## Updating
 
-Start from the latest upstream stable, not `dev`. Carry the selected commits with
-`git cherry-pick -x`, in the order above; do not import entire dev-based branch histories.
-Skip fixes already included upstream. Pick only the listed instruction-normalization
-commit, not its Responses ancestor again. Keep stable's test-layout entries when
-resolving registration conflicts. Update this file with the new base and carried commits.
+Start from the latest upstream stable, not `dev`. Carry selected commits with
+`git cherry-pick -x`, in the order above. Skip fixes already included upstream.
+Pick only the instruction-normalization commit, not its Responses ancestor again.
+Keep stable's test-layout entries and update this file with the new base and hashes.
 
-Do not add installer, restart or automatic rollback helpers. Do not also carry
-`opencode/anthropic-support` or PR #8194, which implement a different instruction mapping.
-Other branches are excluded unless added to this file. Installation stays manual.
+Do not add installer, restart or automatic rollback helpers. Do not carry
+`opencode/anthropic-support` or PR #8194, which use a different instruction mapping.
+Other branches are excluded unless added here. Installation is a separate operation.
 
 ## Release
 
-Set the version with `bun scripts/release-version-sources.ts sync <version>`, commit
-and push `personal`, then push an annotated `v<version>` tag to `fork`.
-The fork's `Personal build` CI builds the tagged commit and publishes a normal GitHub
-release with the npm tarball, provenance and checksums. It does not publish to npm
-or install anything. Manual workflow dispatch builds an artifact without a release.
+Set the version with `bun scripts/release-version-sources.ts sync <version>`,
+commit and push `personal`, then push an annotated `v<version>` tag to `fork`.
+Personal build CI builds the tagged commit and publishes a GitHub release containing
+the npm tarball, provenance, checksums and this file. It does not publish to npm.
+Manual dispatch builds an artifact without a release. Use fork tarballs for updates.
 
-For `personal.1`, the user requested no repeat of the previously completed product
-tests. The carries applied with only test-registration conflicts. CI results are
-recorded in the tag's Actions run, not assumed from earlier builds.
-Use fork release tarballs for updates, not the upstream npm updater.
-
+Validation for this release: typecheck, focused carry and already-upstream regression
+tests, build-contract and repository guards, privacy scan, structure check and docs
+build. The full suite is not run for this stable-based carry: focused tests cover
+the changed contracts; broader upstream behavior relies on stable release validation.
+Optional real OpenCode/Kilo binary tests are skipped without their opt-in environment.
+Three layout assertions hit EPERM on an old untracked routing probe in this checkout;
+the layout guards are checked again on a clean tracked-tree copy of the same HEAD.
+Exact-head build and release evidence is in the tag's Personal build Actions run.
 ## Install the latest release (Windows)
 
 Run in non-administrator PowerShell 7 with GitHub CLI (`gh`):
