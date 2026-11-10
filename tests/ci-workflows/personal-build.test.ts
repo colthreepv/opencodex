@@ -53,12 +53,16 @@ test("the artifact contains the prepared package, source provenance and checksum
 test("only a successfully built tag may publish a normal fork release", () => {
   const release = workflow.jobs.release!;
   expect(release.needs).toBe("package");
-  expect(release.if).toBe("github.repository == 'colthreepv/opencodex' && startsWith(github.ref, 'refs/tags/v') && contains(github.ref, '-personal.')");
+  expect(release.if).toBe("github.event_name == 'push' && github.repository == 'colthreepv/opencodex' && startsWith(github.ref, 'refs/tags/v') && contains(github.ref, '-personal.')");
   expect(release.permissions).toEqual({ contents: "write" });
   expect(commands).toContain("bun scripts/release-version-sources.ts check");
   expect(commands).toContain("Release tag does not match package version");
   const publish = release.steps.map(step => step.run ?? "").join("\n");
   expect(publish).toContain("sha256sum --check SHA256SUMS");
+  expect(publish).toContain('select(.object.type == "tag") | .object.sha');
+  expect(publish).toContain('select(.object.type == "commit") | .object.sha');
+  expect(publish).toContain('test "$tag_commit" = "$RELEASE_COMMIT"');
+  expect(publish.indexOf('test "$tag_commit"')).toBeLessThan(publish.indexOf("gh release create"));
   expect(publish).toContain('--verify-tag --latest --title "$RELEASE_TAG"');
   expect(publish).not.toContain("--prerelease");
   expect(publish).not.toMatch(/npm publish|service (start|stop)|git push/);

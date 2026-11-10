@@ -95,7 +95,7 @@ jobs:
           retention-days: 14
 
   release:
-    if: github.repository == 'colthreepv/opencodex' && startsWith(github.ref, 'refs/tags/v') && contains(github.ref, '-personal.')
+    if: github.event_name == 'push' && github.repository == 'colthreepv/opencodex' && startsWith(github.ref, 'refs/tags/v') && contains(github.ref, '-personal.')
     needs: package
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -117,6 +117,10 @@ jobs:
         run: |
           cd dist/personal
           sha256sum --check SHA256SUMS
+          tag_object=$(gh api "repos/$GH_REPO/git/ref/tags/$RELEASE_TAG" --jq 'select(.object.type == "tag") | .object.sha')
+          test -n "$tag_object" || { echo "Expected an annotated release tag" >&2; exit 1; }
+          tag_commit=$(gh api "repos/$GH_REPO/git/tags/$tag_object" --jq 'select(.object.type == "commit") | .object.sha')
+          test "$tag_commit" = "$RELEASE_COMMIT" || { echo "Release tag no longer points to the built commit" >&2; exit 1; }
           gh release create "$RELEASE_TAG" ./*.tgz SHA256SUMS provenance.json personal.md \
             --verify-tag --latest --title "$RELEASE_TAG" \
             --notes "Personal fork based on upstream v2.100.0. Includes OpenCode Responses/Connect, Responses instruction normalization, ScribeTray dictation fixes, and native model display names. Source commit: $RELEASE_COMMIT. Install the npm tarball manually. No standalone executables or desktop installers are included. Do not use the upstream npm updater to replace this fork."
