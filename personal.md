@@ -47,6 +47,38 @@ Optional real OpenCode/Kilo binary tests are skipped without their opt-in enviro
 Three layout assertions hit EPERM on an old untracked routing probe in this checkout;
 the layout guards are checked again on a clean tracked-tree copy of the same HEAD.
 Exact-head build and release evidence is in the tag's Personal build Actions run.
+## Verification detail
+
+- `bun run typecheck`: passed (2,376 files).
+- `bun run test --` with the carried client/Responses regression files, audio
+  dictation, build contract, client-support matrix, file-size, hygiene, structure
+  and layout guards: 345 passed, 30 optional live-binary cases skipped, 3 layout
+  failures caused by the existing untracked probe's Windows ACL.
+- `bun run test -- tests/codex-integration/model-display-names-management-api.test.ts`:
+  17 passed.
+- Clean tracked-tree copy, `bun run test -- tests/test-layout.test.ts
+  tests/test-layout-tooling.test.ts`: 29 passed.
+- Updated workflow contract: 4 passed; independent fork-local security review
+  confirmed push-only publication, annotated-tag target verification, pinned actions,
+  scoped permissions and current-run artifact checksums.
+- `bun run privacy:scan`, `bun run structure:check`, version-source check and
+  `git diff --check`: passed.
+- `cd docs-site; bun install --frozen-lockfile; bun run build`: passed, 665 pages.
+- `bun run test:changed`: interrupted after 401 seconds; its dev merge base selected
+  2,338 of 3,025 files, disproportionate to this two-fix stable carry. No passing
+  claim is made for that run or the full suite.
+- The interrupted run exposed three unrelated failures. On a clean personal copy,
+  `bun run test -- tests/routing/compatibility-provider-equivalence.test.ts
+  tests/routing/probe-lease-dispatch-wiring.test.ts
+  tests/codex-integration/codex-cli-update-artifacts.test.ts` gave 36 pass, 3 skip,
+  2 fail: the probe regression passed once the unreadable leftover was absent.
+- The remaining compatibility cleanup timeout and offline npm fixture failure
+  reproduce unchanged on a separate clean upstream `v2.100.0` copy with
+  `bun run test -- tests/routing/compatibility-provider-equivalence.test.ts
+  tests/codex-integration/codex-cli-update-artifacts.test.ts`: 26 pass, 3 skip,
+  2 fail. They are inherited validation limits, not treated as passing evidence.
+  The release CI covers the exact tag's version, workflow, typecheck and GUI/package
+  build; it does not run the full upstream test suite.
 ## Install the latest release (Windows)
 
 Run in non-administrator PowerShell 7 with GitHub CLI (`gh`):
