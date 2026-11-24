@@ -48,3 +48,4 @@ builds an artifact only. Install the release tarball through the existing host l
   release and the focused set covers the replaced custom contracts and fork tooling.
   Broader product behavior relies on upstream stable validation.
 - Exact-tag build, GUI packaging and release results are recorded in GitHub Actions.
+- Import-graph run against v2.100.8 selected 1,790/3,439 files for ten fork-only changes and was interrupted after 155 seconds. It is not passing evidence. Focused tests and exact-tag CI are the validation scope.
